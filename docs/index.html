@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>동탄 입지배분 대시보드</title>
+<meta name="description" content="화성시 동탄구 후보지 2곳의 입지인자 4축 표, 경사·향 적합면적(지표 ⑥), 배분 대안 3안과 대안 비교 매트릭스·가중치 역전점">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root {
+  --bg: #f5f7fa; --card: #ffffff; --ink: #1b2430; --muted: #5d6b7a; --line: #dfe4ea;
+  --brand: #12355b; --brand-soft: #e7eef6; --accent: #c1121f;
+  --ok: #1d7a3a; --part: #b7791f; --no: #c1121f;
+  --g: #5f9e57; --ind: #9b7aa0; --com: #e0603a; --res: #f2cf5b;
+  --altA: #5f9e57; --altB: #c97b38; --altC: #3a6ea5;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141a; --card: #171e26; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2a3440;
+    --brand: #8fb8e8; --brand-soft: #1d2a38; --accent: #ff6b6b;
+    --ok: #5cc27a; --part: #e0a84a; --no: #ff6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f141a; --card: #171e26; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2a3440;
+  --brand: #8fb8e8; --brand-soft: #1d2a38; --accent: #ff6b6b;
+  --ok: #5cc27a; --part: #e0a84a; --no: #ff6b6b;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif; }
+header { background: var(--card); border-bottom: 1px solid var(--line); }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+.top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 22px 0 14px; flex-wrap: wrap; }
+h1 { margin: 0; font-size: 1.6rem; color: var(--brand); letter-spacing: -0.02em; }
+.sub { color: var(--muted); font-size: .9rem; margin-top: 2px; }
+nav { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 10px; }
+nav a { white-space: nowrap; padding: 6px 12px; border-radius: 999px; color: var(--muted); text-decoration: none; font-size: .88rem; }
+nav a:hover { background: var(--brand-soft); color: var(--brand); }
+button.theme { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+section { padding: 26px 0 6px; }
+h2 { font-size: 1.2rem; margin: 0 0 4px; color: var(--brand); }
+h2 small { font-weight: 400; color: var(--muted); font-size: .85rem; margin-left: 6px; }
+.lead { color: var(--muted); margin: 0 0 14px; font-size: .92rem; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.kpi .lab { color: var(--muted); font-size: .8rem; }
+.kpi .val { font-size: 1.55rem; font-weight: 700; color: var(--ink); line-height: 1.2; margin-top: 4px; }
+.kpi .note { font-size: .8rem; color: var(--muted); margin-top: 4px; }
+.grid2 { display: grid; grid-template-columns: 1fr 340px; gap: 14px; }
+@media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+#map { height: 560px; border-radius: 12px; border: 1px solid var(--line); z-index: 0; }
+@media (max-width: 600px) { #map { height: 420px; } }
+.ctl h3 { font-size: .9rem; margin: 12px 0 6px; }
+.ctl h3:first-child { margin-top: 0; }
+.ctl label { display: flex; align-items: center; gap: 8px; font-size: .88rem; padding: 2px 0; cursor: pointer; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { flex: 1; border: 0; background: transparent; color: var(--ink); padding: 6px 4px; font-size: .82rem; cursor: pointer; }
+.seg button.on { background: var(--brand); color: var(--card); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: .8rem; color: var(--muted); margin-top: 8px; }
+.sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+.mapnote { font-size: .8rem; color: var(--muted); margin-top: 10px; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .86rem; }
+th { text-align: left; background: var(--brand-soft); color: var(--brand); padding: 8px; font-weight: 600; white-space: nowrap; }
+td { padding: 7px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.c { text-align: center; }
+.j { font-weight: 700; text-align: center; font-size: 1rem; }
+.j.ok { color: var(--ok); } .j.part { color: var(--part); } .j.no { color: var(--no); }
+.crit { color: var(--muted); font-size: .78rem; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.chip { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 4px 12px; font-size: .84rem; cursor: pointer; }
+.chip.on { background: var(--brand); color: var(--card); border-color: var(--brand); }
+.bars .row { display: grid; grid-template-columns: 110px 1fr; gap: 10px; align-items: center; margin: 8px 0; font-size: .85rem; }
+.bars .track { display: flex; flex-direction: column; gap: 3px; }
+.bar { height: 18px; border-radius: 4px; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; color: #fff; font-size: .75rem; font-weight: 600; min-width: 34px; }
+.stack { display: flex; height: 26px; border-radius: 6px; overflow: hidden; }
+.stack div { display: flex; align-items: center; justify-content: center; font-size: .72rem; color: #222; font-weight: 600; white-space: nowrap; overflow: hidden; }
+.sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px 18px; }
+.sl { font-size: .84rem; }
+.sl .h { display: flex; justify-content: space-between; gap: 8px; }
+.sl .h b { font-variant-numeric: tabular-nums; }
+.sl input { width: 100%; accent-color: var(--brand); }
+.rank { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+@media (max-width: 600px) { .rank { grid-template-columns: 1fr; } }
+.rk { border: 1px solid var(--line); border-radius: 10px; padding: 12px; border-top: 4px solid var(--c); }
+.rk .n { font-size: .78rem; color: var(--muted); }
+.rk .s { font-size: 1.5rem; font-weight: 700; }
+.rk.first { background: var(--brand-soft); }
+.badge { display: inline-block; font-size: .75rem; padding: 2px 8px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); margin-left: 6px; }
+.badge.warn { background: #fde8e8; color: #a11; }
+.btn { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: .85rem; }
+.flex { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+.callout { border-left: 4px solid var(--brand); background: var(--brand-soft); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: .9rem; margin: 12px 0; }
+.dl a { display: inline-block; margin: 4px 8px 4px 0; padding: 7px 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--brand); text-decoration: none; font-size: .88rem; background: var(--card); }
+code { background: var(--brand-soft); padding: 1px 5px; border-radius: 4px; font-size: .85em; word-break: break-all; }
+footer { color: var(--muted); font-size: .8rem; padding: 30px 0 40px; }
+.leaflet-container { background: var(--bg); font: inherit; }
+.leaflet-popup-content { font-size: .85rem; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1>동탄 입지배분 대시보드</h1>
+        <div class="sub" id="sub"></div>
+      </div>
+      <button class="theme" id="themeBtn" aria-label="테마 전환">◐ 테마</button>
+    </div>
+    <nav>
+      <a href="#summary">요약</a><a href="#mapSec">지도</a><a href="#four">① 4축 표</a><a href="#i6">② 지표 ⑥</a>
+      <a href="#alts">③ 배분 대안</a><a href="#matrix">④ 매트릭스</a><a href="#rev">⑤ 역전점</a><a href="#record">기록</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="summary">
+    <div class="kpis" id="kpis"></div>
+  </section>
+
+  <section id="mapSec">
+    <h2>지도<small>화성시 동탄구 · 후보지 A·B</small></h2>
+    <p class="lead">레이어를 켜고 끄며 현행 용도지역, 지표 ⑥ 적합 셀, 대안별 배분 결과를 비교합니다. 셀을 누르면 속성이 보입니다.</p>
+    <div class="grid2">
+      <div id="map" role="region" aria-label="동탄구 지도"></div>
+      <div class="card ctl">
+        <h3>보기</h3>
+        <div class="seg" id="viewSeg">
+          <button data-v="zoning" class="on">현행 용도지역</button>
+          <button data-v="i6">지표 ⑥</button>
+          <button data-v="alt">배분 대안</button>
+        </div>
+        <div id="viewOpt" style="margin-top:10px"></div>
+        <div class="legend" id="legend"></div>
+        <h3>겹쳐 보기</h3>
+        <label><input type="checkbox" id="lyCand" checked> 후보지 경계</label>
+        <label><input type="checkbox" id="lyArt" checked> 간선도로 (OSM)</label>
+        <label><input type="checkbox" id="lyPts" checked> 철도역 · IC</label>
+        <p class="mapnote">격자는 DEM 90m 셀(0.81ha)입니다. 배경지도 © OpenStreetMap contributors.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="four">
+    <h2>① 입지인자 4축 표<small>후보지 2곳 × 4개 용도 × 4개 축</small></h2>
+    <p class="lead">요건 문장은 원본 13~21번(《토지이용계획론》 2015)에서 옮겼고, 각 칸에 측정할 수 있는 수치 기준을 붙였습니다. ○ 충족 · △ 부분 충족 · × 미충족</p>
+    <div class="chips" id="useChips"></div>
+    <div class="card tablewrap"><table id="fourTbl"></table></div>
+    <div class="card tablewrap" style="margin-top:12px"><table id="fourSum"></table></div>
+  </section>
+
+  <section id="i6">
+    <h2>② 지표 ⑥ 경사·향 적합면적 비율<small>경사 ≤ 임계값 AND 향 135~225° AND 표고 ≤ 기준 +50m</small></h2>
+    <p class="lead">임계값 10·15·25% 세 값을 모두 저장합니다. '경사만' 막대와 비교하면 어떤 조건이 적합면적을 줄였는지 보입니다.</p>
+    <div class="card">
+      <div class="bars" id="i6Bars"></div>
+      <div class="legend" id="i6Leg"></div>
+    </div>
+    <div class="callout" id="i6Note"></div>
+  </section>
+
+  <section id="alts">
+    <h2>③ 배분 대안 3안<small>후보지 A · ① 녹지 → ② 공업 → ③ 상업·업무 → ④ 주거</small></h2>
+    <p class="lead">세 대안의 배분 순서는 같습니다. 공통으로 확정한 녹지 위에서 추가 녹지 규칙과 용도 프로그램만 바꿨습니다. 목표인구는 <span id="target"></span>명입니다.</p>
+    <div class="card" id="altStack"></div>
+    <div class="card tablewrap" style="margin-top:12px"><table id="altTbl"></table></div>
+  </section>
+
+  <section id="matrix">
+    <h2>④ 대안 비교 매트릭스<small>5점 척도 × 가중치(합 1.00)</small></h2>
+    <p class="lead">지표·가중치·채점 구간은 대안을 계산하기 전에 승인해 고정했습니다. 아래 슬라이더로 가중치를 바꾸면 총점과 순위가 바로 다시 계산됩니다. 하나를 움직이면 나머지는 원래 비율대로 맞춰 합 1.00을 유지합니다.</p>
+    <div class="card">
+      <div class="flex"><div><b>가중치</b> <span class="badge" id="wBadge">승인안</span></div><button class="btn" id="wReset">승인 가중치로 되돌리기</button></div>
+      <div class="sliders" id="sliders" style="margin-top:10px"></div>
+      <div class="rank" id="rank"></div>
+    </div>
+    <div class="card tablewrap" style="margin-top:12px"><table id="mxTbl"></table></div>
+    <div class="card tablewrap" style="margin-top:12px"><table id="bandTbl"></table></div>
+  </section>
+
+  <section id="rev">
+    <h2>⑤ 가중치 역전점<small>승인 가중치 기준 1·2위가 바뀌는 값</small></h2>
+    <p class="lead">한 지표의 가중치만 t로 바꾸고 나머지는 비율을 유지할 때, 1위가 바뀌는 t입니다. 여유폭이 작을수록 결론이 그 가중치에 민감합니다.</p>
+    <div class="card tablewrap"><table id="revTbl"></table></div>
+    <div class="callout" id="revNote"></div>
+  </section>
+
+  <section id="record">
+    <h2>자료 · 재현 기록</h2>
+    <div class="card">
+      <p style="margin-top:0"><b>인증 실패 원인 판별</b> — 파이썬 스크립트로 VWorld 2D 데이터 API를 호출할 때 <code>domain</code> 파라미터가 없으면 <code>INCORRECT_KEY</code>로 거절됐고, 등록한 서비스 URL을 <code>domain</code>으로 보내면 <code>OK</code>였습니다. 인증키는 환경변수 <code>VWORLD_KEY</code>로만 읽고 이 저장소 어디에도 저장하지 않았습니다.</p>
+      <div class="tablewrap"><table id="catTbl"></table></div>
+      <p class="mapnote" id="srcNote"></p>
+      <div class="dl">
+        <a href="https://github.com/sin030327/dongtan-allocation-dashboard">GitHub 저장소 · 코드</a>
+        <a href="files/6주차_대안비교매트릭스.xlsx" download>매트릭스 원본 (xlsx)</a>
+        <a href="files/6주차_보고서_동탄_입지배분과대안.pdf">보고서 (PDF)</a>
+      </div>
+    </div>
+  </section>
+</main>
+<footer class="wrap" id="foot"></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="data.js"></script>
+<script>
+(() => {
+const D = window.DATA;
+const W = D.weights, INDS = W.indicators;
+const ALTS = D.alternatives;
+const ALT_COL = ['--altA', '--altB', '--altC'];
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '—').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = (v, d = 1) => (v == null || isNaN(v)) ? '—' : Number(v).toLocaleString('ko-KR', {maximumFractionDigits: d, minimumFractionDigits: d});
+
+// ---------- theme
+const root = document.documentElement;
+try { const t = localStorage.getItem('theme'); if (t) root.dataset.theme = t; } catch (e) {}
+$('themeBtn').onclick = () => {
+  const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  root.dataset.theme = dark ? 'light' : 'dark';
+  try { localStorage.setItem('theme', root.dataset.theme); } catch (e) {}
+  restyle(); renderAll();
+};
+
+$('sub').textContent = `${D.meta.course} · 팀 ${D.meta.team.join(' · ')} · 자료 조회 ${D.meta.queried_on}`;
+$('target').textContent = W.target_population.toLocaleString('ko-KR');
+
+// ---------- scoring (approved_weights.json 과 동일 규칙)
+function score(val, ind) {
+  const b = ind.bands;
+  let s = 1 + (ind.direction === '+' ? b.filter(x => val >= x).length : b.filter(x => val <= x).length);
+  if (ind.id === 'I4' && val < 12) s = 1;
+  return s;
+}
+const SC = ALTS.map(a => INDS.map(i => score(a[i.id], i)));
+const W0 = INDS.map(i => i.weight);
+let w = W0.slice();
+const totals = ws => SC.map(r => r.reduce((s, x, k) => s + x * ws[k], 0));
+
+// ---------- KPIs
+function renderKpis() {
+  const t = totals(W0); const order = t.map((v, i) => i).sort((a, b) => t[b] - t[a]);
+  const sf = D.siteFactors;
+  const i6 = D.indicator6.filter(r => r['임계값'] === '기준안 15%');
+  const tight = D.reversal.filter(r => r['여유폭(%p)'] != null).sort((a, b) => a['여유폭(%p)'] - b['여유폭(%p)'])[0];
+  const k = [
+    ['대상지', '화성시 동탄구', `${fmt(sf.GU['면적(ha·폴리곤)'], 0)}ha · 후보지 A ${fmt(sf.A['면적(ha·폴리곤)'], 0)}ha · B ${fmt(sf.B['면적(ha·폴리곤)'], 0)}ha`],
+    ['지표 ⑥ (기준안 15%)', `A ${fmt(i6[0]['값(%)'])}% · B ${fmt(i6[1]['값(%)'])}%`, `경사만 보면 A ${fmt(i6[0]['경사 단독 충족(%)'])}% — 향이 판정을 가름`],
+    ['매트릭스 1위', ALTS[order[0]]['대안'].replace('대안 ', ''), `${fmt(t[order[0]], 2)}점 · 2위 ${ALTS[order[1]]['대안'].replace('대안 ', '')} ${fmt(t[order[1]], 2)}점`],
+    ['가장 민감한 가중치', INDS[D.reversal.indexOf(tight)].criterion, `${tight['방향']} → ${tight['역전 후 1위'].replace('대안 ', '')} 1위 · 여유 ${fmt(tight['여유폭(%p)'])}%p`],
+  ];
+  $('kpis').innerHTML = k.map(([l, v, n]) => `<div class="card kpi"><div class="lab">${esc(l)}</div><div class="val">${esc(v)}</div><div class="note">${esc(n)}</div></div>`).join('');
+}
+
+// ---------- map
+const ZC = {'주거': '#f2cf5b', '상업': '#e0603a', '공업': '#9b7aa0', '녹지': '#7cb366', '관리': '#c3dfa8', '농림': '#c9ad80', '자연환경보전': '#3f7d4e'};
+const LUC = {'공원·녹지': '#5f9e57', '공업': '#9b7aa0', '상업·업무': '#e0603a', '주거': '#f2cf5b'};
+const I6C = {10: '#2f7d4f', 15: '#86c06c', 25: '#fde68a', 0: '#c9ced6'};
+const map = L.map('map', {scrollWheelZoom: false, zoomSnap: 0.25});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 18, attribution: '© OpenStreetMap contributors'}).addTo(map);
+const guLayer = L.geoJSON(D.geo.gu, {style: () => ({color: css('--ink'), weight: 2, fill: false})}).addTo(map);
+map.fitBounds(guLayer.getBounds(), {padding: [10, 10]});
+let viewLayer = null, view = 'zoning', i6th = 15, altIdx = 2;
+const candLayer = L.geoJSON(D.geo.candidates, {
+  style: () => ({color: '#c1121f', weight: 2.5, fill: false, dashArray: '6 4'}),
+  onEachFeature: (f, l) => l.bindTooltip(`후보지 ${f.properties.id}`, {permanent: true, direction: 'top', className: ''})
+                          .bindPopup(`<b>${esc(f.properties.name)}</b><br>${fmt(f.properties.ha)}ha`)
+}).addTo(map);
+const artLayer = L.geoJSON(D.geo.arterial, {style: {color: '#555', weight: 1.4, opacity: .8}, interactive: false}).addTo(map);
+const ptLayer = L.geoJSON(D.geo.points, {
+  pointToLayer: (f, ll) => L.circleMarker(ll, {radius: 6, color: '#fff', weight: 1.5, fillOpacity: 1,
+    fillColor: f.properties.kind === '역' ? '#1d3557' : '#2a9d8f'}).bindTooltip(f.properties.name)
+}).addTo(map);
+$('lyCand').onchange = e => e.target.checked ? candLayer.addTo(map) : map.removeLayer(candLayer);
+$('lyArt').onchange = e => e.target.checked ? artLayer.addTo(map) : map.removeLayer(artLayer);
+$('lyPts').onchange = e => e.target.checked ? ptLayer.addTo(map) : map.removeLayer(ptLayer);
+
+function drawView() {
+  if (viewLayer) map.removeLayer(viewLayer);
+  let leg = '', opt = '';
+  if (view === 'zoning') {
+    viewLayer = L.geoJSON(D.geo.zoning, {style: f => ({color: ZC[f.properties.group], weight: 0, fillOpacity: .55}),
+      onEachFeature: (f, l) => l.bindPopup(`${esc(f.properties.group)}지역`)});
+    leg = Object.entries(ZC).map(([k, c]) => `<span><i class="sw" style="background:${c}"></i>${k}</span>`).join('');
+    opt = `<span class="crit">VWorld LT_C_UQ111~114 (현행 지정)</span>`;
+  } else if (view === 'i6') {
+    // 선택 임계값보다 큰 등급 셀은 부적합 색으로
+    viewLayer = L.geoJSON(D.geo.i6, {
+      style: f => { const t = f.properties.th; const ok = t && t <= i6th; return {color: ok ? I6C[t] : I6C[0], weight: 0, fillOpacity: ok ? .85 : .45}; },
+      onEachFeature: (f, l) => { const t = f.properties.th; l.bindPopup(t && t <= i6th ? `후보지 ${f.properties.site} · 적합 (경사 ${t}% 이하 · 남향 · 표고 기준 이내)` : `후보지 ${f.properties.site} · 경사 ${i6th}% 기준 부적합`); }});
+    opt = `<div class="seg">${[10, 15, 25].map(t => `<button data-t="${t}" class="${t === i6th ? 'on' : ''}">경사 ${t}%</button>`).join('')}</div>`;
+    leg = [10, 15, 25].filter(t => t <= i6th).map(t => `<span><i class="sw" style="background:${I6C[t]}"></i>${t}% 이하 적합</span>`).join('') + `<span><i class="sw" style="background:${I6C[0]}"></i>부적합</span>`;
+  } else {
+    viewLayer = L.geoJSON(D.geo.alts, {filter: f => f.properties.alt === altIdx,
+      style: f => ({color: LUC[f.properties.lu], weight: 0, fillOpacity: .85}),
+      onEachFeature: (f, l) => l.bindPopup(`${esc(ALTS[altIdx]['대안'])} · ${esc(f.properties.lu)}`)});
+    opt = `<div class="seg">${ALTS.map((a, i) => `<button data-a="${i}" class="${i === altIdx ? 'on' : ''}">${esc(a['대안'].split('·')[0].replace('대안', '').trim())}안</button>`).join('')}</div><div class="crit" style="margin-top:6px">${esc(ALTS[altIdx]['대안'])} · 수용 ${ALTS[altIdx]['수용인구(명)'].toLocaleString('ko-KR')}명</div>`;
+    leg = Object.entries(LUC).map(([k, c]) => `<span><i class="sw" style="background:${c}"></i>${k}</span>`).join('');
+  }
+  viewLayer.addTo(map); guLayer.bringToFront(); if ($('lyCand').checked) candLayer.bringToFront();
+  $('viewOpt').innerHTML = opt; $('legend').innerHTML = leg;
+  $('viewOpt').querySelectorAll('button[data-t]').forEach(b => b.onclick = () => { i6th = +b.dataset.t; drawView(); });
+  $('viewOpt').querySelectorAll('button[data-a]').forEach(b => b.onclick = () => { altIdx = +b.dataset.a; drawView(); });
+  if (view !== 'zoning') { const lay = L.geoJSON(D.geo.candidates.features.filter(f => view === 'i6' || f.properties.id === 'A')); map.fitBounds(lay.getBounds(), {padding: [20, 20]}); }
+  else map.fitBounds(guLayer.getBounds(), {padding: [10, 10]});
+}
+$('viewSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
+  view = b.dataset.v; $('viewSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); drawView();
+});
+function restyle() { guLayer.setStyle({color: css('--ink')}); }
+
+// ---------- ① 4축 표
+let useSel = '전체';
+function renderFour() {
+  const uses = ['전체', ...new Set(D.fourAxis.map(r => r['용도']))];
+  $('useChips').innerHTML = uses.map(u => `<button class="chip ${u === useSel ? 'on' : ''}" data-u="${u}">${u}</button>`).join('');
+  $('useChips').querySelectorAll('button').forEach(b => b.onclick = () => { useSel = b.dataset.u; renderFour(); });
+  const jc = j => ({'○': 'ok', '△': 'part', '×': 'no'}[j] || '');
+  const rows = D.fourAxis.filter(r => useSel === '전체' || r['용도'] === useSel);
+  $('fourTbl').innerHTML = `<thead><tr><th>용도</th><th>축</th><th>요건 문장 · 수치 기준</th><th>근거</th><th>후보지 A 값</th><th>A</th><th>후보지 B 값</th><th>B</th></tr></thead><tbody>` +
+    rows.map(r => `<tr><td><b>${esc(r['용도'])}</b></td><td>${esc(r['축'])}</td><td style="min-width:240px">${esc(r['요건 문장'])}<div class="crit">${esc(r['수치 기준'])}</div></td><td class="crit">${esc(r['근거'])}</td><td>${esc(r['후보지 A 값'])}</td><td class="j ${jc(r['A 판정'])}">${esc(r['A 판정'])}</td><td>${esc(r['후보지 B 값'])}</td><td class="j ${jc(r['B 판정'])}">${esc(r['B 판정'])}</td></tr>`).join('') + '</tbody>';
+  const S = D.fourAxisSummary;
+  $('fourSum').innerHTML = `<thead><tr><th>용도별 판정 (○2 · △1 · ×0, 8점 만점)</th>${S.map(r => `<th class="num">${esc(r['용도'])}</th>`).join('')}<th class="num">합계</th></tr></thead><tbody>` +
+    ['A', 'B'].map(k => { const col = `후보지 ${k} 점수(8점 만점)`; const sum = S.reduce((s, r) => s + r[col], 0);
+      return `<tr><td>후보지 ${k}</td>${S.map(r => `<td class="num">${r[col]}${r['우위'] === k ? ' ◀' : ''}</td>`).join('')}<td class="num"><b>${sum}</b> / 32</td></tr>`; }).join('') +
+    `<tr><td colspan="${S.length + 2}" class="crit">→ 후보지 A를 배분 대상지로 선정. 두 곳 모두 공업 지형 요건(경사 5% 이하 연속 10ha)은 미충족.</td></tr></tbody>`;
+}
+
+// ---------- ② 지표 ⑥
+function renderI6() {
+  const rows = D.indicator6;
+  const sites = [...new Set(rows.map(r => r['대상']))];
+  const cols = [css('--altC'), css('--altB'), css('--muted')];
+  $('i6Bars').innerHTML = ['하한 10%', '기준안 15%', '상한 25%'].map(th => `<div class="row"><div><b>${th}</b></div><div class="track">` +
+    sites.map((s, i) => { const r = rows.find(x => x['대상'] === s && x['임계값'] === th);
+      return `<div style="display:flex;align-items:center;gap:6px"><div class="bar" style="width:${Math.max(r['값(%)'], 3)}%;background:${cols[i]}">${fmt(r['값(%)'])}%</div><span class="crit">경사만 ${fmt(r['경사 단독 충족(%)'])}% · ${fmt(r['적합면적(ha)'])}ha</span></div>`; }).join('') + '</div></div>').join('');
+  $('i6Leg').innerHTML = sites.map((s, i) => `<span><i class="sw" style="background:${cols[i]}"></i>${esc(s)}</span>`).join('');
+  const sf = D.siteFactors;
+  $('i6Note').innerHTML = `후보지 A는 경사 15% 이하가 ${fmt(sf.A['경사 ≤15% 비율(%)'])}%인데 남향(135~225°) 셀이 ${fmt(sf.A['남향(135~225°) 셀 비율(%)'])}%뿐이라, 세 조건을 모두 충족하는 셀은 크게 줄어듭니다. <b>향이 판정을 가릅니다.</b> DEM: ${esc(D.meta.dem)} (90m 셀 재표본, 조회 ${esc(D.meta.queried_on)}). 경사 2% 미만 평탄 셀은 향과 무관하게 봤고, 기준표고는 후보지 1km 안 기존 시가지의 평균 표고입니다(가정).`;
+}
+
+// ---------- ③ 대안
+function renderAlts() {
+  const keys = ['공원·녹지', '공업', '상업·업무', '주거'];
+  $('altStack').innerHTML = ALTS.map((a, i) => `<div style="margin:6px 0 12px"><div class="flex" style="margin-bottom:4px"><b style="color:var(${ALT_COL[i]})">${esc(a['대안'])}</b><span class="crit">수용 ${a['수용인구(명)'].toLocaleString('ko-KR')}명 (목표의 ${fmt(a.I6)}%)</span></div><div class="stack">` +
+    keys.map(k => `<div style="width:${a[k + '(%)']}%;background:${LUC[k]}" title="${k} ${a[k + '(ha)']}ha">${a[k + '(%)'] >= 6 ? k + ' ' + fmt(a[k + '(%)']) + '%' : ''}</div>`).join('') + '</div></div>').join('') +
+    `<div class="legend">${keys.map(k => `<span><i class="sw" style="background:${LUC[k]}"></i>${k}</span>`).join('')}</div>`;
+  const rows = [['공원·녹지(ha)', 1], ['공업(ha)', 1], ['상업·업무(ha)', 1], ['주거(ha)', 1], ['개발용지(ha)', 1], ['주거 순면적(ha)', 1], ['수용인구(명)', 0], ['공원 법정 확보기준(ha)', 1]];
+  $('altTbl').innerHTML = `<thead><tr><th>항목</th>${ALTS.map(a => `<th class="num">${esc(a['대안'])}</th>`).join('')}</tr></thead><tbody>` +
+    rows.map(([k, d]) => `<tr><td>${k}</td>${ALTS.map(a => `<td class="num">${fmt(a[k], d)}</td>`).join('')}</tr>`).join('') +
+    `<tr><td colspan="4" class="crit">수용인구 = 주거 면적 × (1 − 도로·기반시설 ${W.road_share_of_developed * 100}%) × 순밀도 ${W.net_residential_density_per_ha}인/ha. 공원 확보기준 = max(인구 × 9㎡, 부지 × 12%) — 도시공원법 시행규칙 별표 2.</td></tr></tbody>`;
+}
+
+// ---------- ④ 매트릭스 (슬라이더)
+function setWeight(k, v) {
+  v = Math.min(1, Math.max(0, v));
+  const restSum = W0.reduce((s, x, j) => j === k ? s : s + x, 0);
+  w = W0.map((x, j) => j === k ? v : x / restSum * (1 - v));
+}
+function renderMatrix() {
+  const changed = w.some((x, k) => Math.abs(x - W0[k]) > 1e-6);
+  $('wBadge').textContent = changed ? '가정 시나리오 (승인안 아님)' : '승인안';
+  $('wBadge').className = 'badge' + (changed ? ' warn' : '');
+  $('sliders').innerHTML = INDS.map((ind, k) => `<div class="sl"><div class="h"><span>${esc(ind.criterion)}</span><b>${w[k].toFixed(3)}</b></div><input type="range" min="0" max="1" step="0.005" value="${w[k]}" data-k="${k}" aria-label="${esc(ind.criterion)} 가중치"><div class="crit">${esc(ind.name)} · 승인 ${W0[k].toFixed(2)}</div></div>`).join('');
+  $('sliders').querySelectorAll('input').forEach(inp => inp.oninput = e => { setWeight(+e.target.dataset.k, +e.target.value); renderMatrixLive(); });
+  renderMatrixLive();
+}
+function renderMatrixLive() {
+  const changed = w.some((x, k) => Math.abs(x - W0[k]) > 1e-6);
+  $('wBadge').textContent = changed ? '가정 시나리오 (승인안 아님)' : '승인안';
+  $('wBadge').className = 'badge' + (changed ? ' warn' : '');
+  $('sliders').querySelectorAll('input').forEach((inp, k) => { inp.value = w[k]; inp.closest('.sl').querySelector('b').textContent = w[k].toFixed(3); });
+  const t = totals(w); const order = t.map((v, i) => i).sort((a, b) => t[b] - t[a]);
+  $('rank').innerHTML = order.map((i, r) => `<div class="rk ${r === 0 ? 'first' : ''}" style="--c:var(${ALT_COL[i]})"><div class="n">${r + 1}위</div><div><b>${esc(ALTS[i]['대안'])}</b></div><div class="s">${t[i].toFixed(2)}</div></div>`).join('');
+  $('mxTbl').innerHTML = `<thead><tr><th>대안</th>${INDS.map((ind, k) => `<th class="num">${esc(ind.criterion)}<div class="crit">${esc(ind.name)} (${ind.unit}, ${ind.direction === '+' ? '↑' : '↓'})</div></th>`).join('')}<th class="num">총점</th></tr></thead><tbody>` +
+    `<tr><td><b>가중치</b></td>${w.map(x => `<td class="num"><b>${x.toFixed(3)}</b></td>`).join('')}<td class="num">1.00</td></tr>` +
+    ALTS.map((a, i) => `<tr><td><b style="color:var(${ALT_COL[i]})">${esc(a['대안'])}</b></td>${INDS.map((ind, k) => `<td class="num"><b>${SC[i][k]}</b><div class="crit">${fmt(a[ind.id])}</div></td>`).join('')}<td class="num"><b>${t[i].toFixed(2)}</b></td></tr>`).join('') + '</tbody>';
+}
+$('wReset').onclick = () => { w = W0.slice(); renderMatrixLive(); };
+function renderBands() {
+  $('bandTbl').innerHTML = `<thead><tr><th>채점 구간 (사전 승인)</th><th>단위</th><th class="num">1점</th><th class="num">2점</th><th class="num">3점</th><th class="num">4점</th><th class="num">5점</th></tr></thead><tbody>` +
+    INDS.map(i => { const b = i.bands; const s = i.direction === '+' ? [`< ${b[0]}`, `${b[0]}~${b[1]}`, `${b[1]}~${b[2]}`, `${b[2]}~${b[3]}`, `≥ ${b[3]}`] : [`> ${b[0]}`, `${b[1]}~${b[0]}`, `${b[2]}~${b[1]}`, `${b[3]}~${b[2]}`, `≤ ${b[3]}`];
+      return `<tr><td>${esc(i.criterion)} <span class="crit">${esc(i.name)}</span></td><td>${i.unit}</td>${s.map(x => `<td class="num">${esc(x)}</td>`).join('')}</tr>`; }).join('') +
+    `<tr><td colspan="7" class="crit">④ 공원·녹지 비율은 법정 확보기준 12%에 못 미치면 1점. 승인일 ${esc(W.approved_on)} — 대안 계산 전에 고정.</td></tr></tbody>`;
+}
+
+// ---------- ⑤ 역전점
+function renderRev() {
+  $('revTbl').innerHTML = `<thead><tr><th>지표</th><th class="num">승인 가중치</th><th class="num">역전 가중치</th><th>방향</th><th>역전 후 1위</th><th class="num">여유폭 (%p)</th><th></th></tr></thead><tbody>` +
+    D.reversal.map((r, k) => `<tr><td>${esc(r['지표'])}</td><td class="num">${fmt(r['현재 가중치'], 2)}</td><td class="num"><b>${fmt(r['역전 가중치'], 3)}</b></td><td>${esc(r['방향'])}</td><td>${esc(r['역전 후 1위'])}</td><td class="num">${fmt(r['여유폭(%p)'])}</td><td>${r['역전 가중치'] != null ? `<button class="btn" data-k="${k}" data-v="${r['역전 가중치']}">매트릭스에서 보기</button>` : ''}</td></tr>`).join('') + '</tbody>';
+  $('revTbl').querySelectorAll('button').forEach(b => b.onclick = () => {
+    const v = +b.dataset.v, k = +b.dataset.k; const toward = v > W0[k] ? 0.01 : -0.01;
+    setWeight(k, v + toward); renderMatrixLive(); location.hash = 'matrix';
+  });
+  const tight = D.reversal.filter(r => r['여유폭(%p)'] != null).sort((a, b) => a['여유폭(%p)'] - b['여유폭(%p)'])[0];
+  $('revNote').innerHTML = `가장 민감한 지표는 <b>${esc(tight['지표'])}</b>입니다. 가중치가 ${esc(tight['방향'])}로 ${fmt(tight['여유폭(%p)'])}%p만 움직여도 1위가 ${esc(tight['역전 후 1위'])}로 바뀝니다. 따라서 절충안 채택은 <b>목표인구 ${W.target_population.toLocaleString('ko-KR')}명이라는 상위계획 가정</b>이 유지될 때 견고합니다. '매트릭스에서 보기'를 누르면 역전 직후의 가중치가 위 슬라이더에 적용됩니다.`;
+}
+
+// ---------- 기록
+function renderRecord() {
+  $('catTbl').innerHTML = `<thead><tr><th>레이어</th><th>status</th><th class="num">건수</th><th>조회일</th><th>요청 URL (인증키 제외)</th></tr></thead><tbody>` +
+    D.catalog.map(r => `<tr><td>${esc(r.layer)}</td><td>${esc(r.status)}</td><td class="num">${esc(r.record_total)}</td><td>${esc(r.queried_on)}</td><td><code>${esc(r.request_url_without_key)}</code></td></tr>`).join('') + '</tbody>';
+  $('srcNote').innerHTML = `출처: VWorld 2D 데이터 API 2.0 (조회 ${esc(D.meta.queried_on)}) · ${esc(D.meta.dem)} · OpenStreetMap Overpass API (ODbL 1.0, 기준시각 ${esc(D.meta.osm_base)}) · 《토지이용계획론》(2015) 원본 13~21·25~34번 · 「국토기본법」 제19조의2 · 「도시공원법 시행규칙」 별표 2·3.`;
+  $('foot').innerHTML = `스마트도시계획(캡스톤디자인) 6주차 · 팀 ${D.meta.team.join(' · ')} · 모든 값은 저장소의 <code>code/</code> 스크립트로 재현할 수 있습니다.`;
+}
+
+function renderAll() { renderKpis(); drawView(); renderFour(); renderI6(); renderAlts(); renderMatrix(); renderBands(); renderRev(); renderRecord(); }
+renderAll();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "_note": "대안 작성 전 확정·승인된 지표·가중치·채점 구간 (승인 2026-10-12, 팀 확인). 이 파일은 대안 계산(06) 이전에 작성되었고 이후 수정하지 않음.",
+  "approved_on": "2026-10-12",
+  "target_population": 15000,
+  "net_residential_density_per_ha": 200,
+  "road_share_of_developed": 0.20,
+  "indicators": [
+    {"id": "I1", "criterion": "① 지역경쟁력", "name": "일자리 용지(공업+상업업무) 비율", "unit": "%", "direction": "+", "weight": 0.15,
+     "bands": [5, 10, 15, 20]},
+    {"id": "I2", "criterion": "② 지역 간 균형발전", "name": "근린상업 500m 이내 주거 셀 비율", "unit": "%", "direction": "+", "weight": 0.15,
+     "bands": [40, 55, 70, 85]},
+    {"id": "I3", "criterion": "③ 기간시설 효율성", "name": "개발용지의 기존 간선도로 평균거리", "unit": "m", "direction": "-", "weight": 0.15,
+     "bands": [1000, 800, 600, 400]},
+    {"id": "I4", "criterion": "④ 자원 지속가능 관리", "name": "공원·녹지 비율", "unit": "%", "direction": "+", "weight": 0.20,
+     "bands": [12, 20, 30, 40]},
+    {"id": "I5", "criterion": "⑤ 저탄소 친환경", "name": "개발용지 중 지표⑥(경사15%·향·표고) 적합 셀 비율", "unit": "%", "direction": "+", "weight": 0.15,
+     "bands": [10, 20, 30, 40]},
+    {"id": "I6", "criterion": "⑥ 종합계획 정합성", "name": "목표인구 수용률", "unit": "%", "direction": "+", "weight": 0.20,
+     "bands": [70, 80, 90, 100]}
+  ],
+  "scoring_rule": "5점 척도. direction '+' : 값 < b1 → 1, b1~b2 → 2, b2~b3 → 3, b3~b4 → 4, ≥ b4 → 5. direction '-' : 값 > b1 → 1, b1~b2 → 2, b2~b3 → 3, b3~b4 → 4, ≤ b4 → 5. ④는 법정 확보기준(12%) 미달 시 1점."
+}

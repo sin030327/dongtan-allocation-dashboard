@@ -1,0 +1,17 @@
+# 제출용(학번 포함) — 공개 저장소에서 제외
+6주차_과제_동탄_입지배분과대안.pdf
+outputs/report.html
+
+# 비밀 · 환경
+.env
+*.env
+.vwenv
+
+# Python · OS · 세션
+__pycache__/
+*.pyc
+Thumbs.db
+desktop.ini
+~$*
+.claude/
+team_private.txt

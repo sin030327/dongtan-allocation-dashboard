@@ -1,0 +1,11 @@
+{
+ "source": "AWS Terrain Tiles (terrarium) — Mapzen/Tilezen, SRTM·기타 공개 DEM 합성",
+ "tile_url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+ "zoom": 13,
+ "resample": "EPSG:5186 90m 셀 평균",
+ "queried_on": "2026-10-12",
+ "grid": [
+  173,
+  174
+ ]
+}
