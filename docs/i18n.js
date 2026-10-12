@@ -15,7 +15,10 @@ window.I18N = {
     'nav.summary': 'Sintesi', 'nav.map': 'Mappa', 'nav.four': '① Tabella a 4 assi', 'nav.i6': '② Indicatore ⑥',
     'nav.alts': '③ Alternative', 'nav.matrix': '④ Matrice', 'nav.rev': '⑤ Punto di inversione', 'nav.record': 'Registro',
 
-    'map.h': 'Mappa<small>Distretto di Dongtan, Hwaseong · siti candidati A e B</small>',
+    'map.h': 'Mappa',
+    's.h': 'Cerca un’area di studio — tutta la Corea',
+    's.lead': 'Cerca per nome di città/contea/distretto o di quartiere: scelto un risultato, sul suo perimetro il browser ricalcola tutto con le stesse regole di Dongtan, dalla scelta dei due siti candidati fino alla matrice e al punto di inversione. Richiede 1–3 minuti.',
+    's.ph': 'es.: 세종, 판교동, 춘천시, 강릉', 's.btn': 'Cerca', 'nav.search': 'Cerca',
     'map.lead': 'Attiva e disattiva i livelli per confrontare le zone d’uso del suolo vigenti, le celle idonee all’indicatore ⑥ e l’allocazione di ciascuna alternativa. Clicca su una cella per vederne gli attributi.',
     'map.view': 'Vista', 'map.vZoning': 'Zone d’uso vigenti', 'map.vI6': 'Indicatore ⑥', 'map.vAlt': 'Alternative',
     'map.overlay': 'Sovrapposizioni', 'map.lyCand': 'Perimetro dei siti candidati', 'map.lyArt': 'Arterie principali (OSM)',
@@ -28,7 +31,8 @@ window.I18N = {
     'i6.h': '② Indicatore ⑥ — quota di superficie idonea per pendenza ed esposizione<small>pendenza ≤ soglia AND esposizione 135–225° AND quota ≤ riferimento +50 m</small>',
     'i6.lead': 'Si salvano tutti e tre i valori di soglia (10, 15 e 25%). Il confronto con la barra «solo pendenza» mostra quale condizione ha ridotto la superficie idonea.',
 
-    'alts.h': '③ Tre alternative di allocazione<small>Sito A · ① verde → ② industria → ③ commercio e terziario → ④ residenza</small>',
+    'alts.h': '③ Tre alternative di allocazione',
+    'alts.order': '① verde → ② industria → ③ commercio e terziario → ④ residenza',
     'alts.lead': 'L’ordine di allocazione è lo stesso in tutte e tre le alternative: sopra il verde fissato in comune cambiano solo le regole di verde aggiuntivo e il programma delle destinazioni. Popolazione obiettivo: <span id="target"></span> abitanti.',
 
     'mx.h': '④ Matrice di confronto delle alternative<small>scala a 5 punti × pesi (somma 1,00)</small>',
@@ -40,7 +44,7 @@ window.I18N = {
 
     'rec.h': 'Dati e registro di riproducibilità',
     'rec.p': '<b>Diagnosi dell’errore di autenticazione</b> — chiamando la VWorld 2D Data API da uno script Python senza il parametro <code>domain</code>, la richiesta è stata rifiutata con <code>INCORRECT_KEY</code>; inviando come <code>domain</code> l’URL di servizio registrato, la risposta è stata <code>OK</code>. La chiave di autenticazione si legge solo dalla variabile d’ambiente <code>VWORLD_KEY</code> e non è salvata in nessun punto di questo repository.',
-    'dl.repo': 'Repository GitHub · codice', 'dl.xlsx': 'Matrice originale (xlsx)', 'dl.pdf': 'Relazione (PDF, in coreano)'
+    'dl.repo': 'Repository GitHub · codice', 'dl.xlsx': 'Matrice originale (xlsx, esempio Dongtan)', 'dl.pdf': 'Relazione (PDF in coreano, esempio Dongtan)'
   },
 
   DYN: {
@@ -53,7 +57,10 @@ window.I18N = {
     'k.site': ['대상지', 'Area di studio'], 'k.siteV': ['화성시 동탄구', 'Dongtan-gu, Hwaseong'],
     'k.siteN': ['{0}ha · 후보지 A {1}ha · B {2}ha', '{0} ha · sito A {1} ha · B {2} ha'],
     'k.i6': ['지표 ⑥ (기준안 15%)', 'Indicatore ⑥ (scenario base 15%)'],
-    'k.i6N': ['경사만 보면 A {0}% — 향이 판정을 가름', 'Con la sola pendenza A {0}% — decide l’esposizione'],
+    'k.i6N': ['경사 조건만 보면 A {0}%', 'Con la sola pendenza A {0}%'],
+    'k.sensNone': ['0~1 전 구간에서 1위 유지', 'primo posto mantenuto su tutto l’intervallo'],
+    'cands': ['후보지 A·B', 'siti candidati A e B'],
+    'cell': ['경사 {0}% · 향 {1}° · 표고 {2}m', 'pendenza {0}% · esposizione {1}° · quota {2} m'],
     'k.top': ['매트릭스 1위', '1° posto nella matrice'],
     'k.topN': ['{0}점 · 2위 {1} {2}점', '{0} punti · 2° {1} {2} punti'],
     'k.sens': ['가장 민감한 가중치', 'Peso più sensibile'],
@@ -73,15 +80,19 @@ window.I18N = {
                 ['Destinazione', 'Asse', 'Requisito · criterio numerico', 'Fonte', 'Valore sito A', 'A', 'Valore sito B', 'B']],
     'four.sumH': ['용도별 판정 (○2 · △1 · ×0, 8점 만점)', 'Giudizio per destinazione (○2 · △1 · ×0, su 8 punti)'],
     'four.sumT': ['합계', 'Totale'], 'four.site': ['후보지 {0}', 'Sito {0}'],
-    'four.sumNote': ['→ 후보지 A를 배분 대상지로 선정. 두 곳 모두 공업 지형 요건(경사 5% 이하 연속 10ha)은 미충족.',
-                     '→ Il sito A è scelto come area di allocazione. Nessuno dei due soddisfa il requisito morfologico industriale (pendenza ≤ 5% su 10 ha contigui).'],
+    'four.pick': ['→ 4축 합계가 높은 후보지 {0}를 배분 대상지로 선정(동률이면 A).', '→ Il sito {0}, con il totale più alto sui 4 assi, è scelto come area di allocazione (a parità, A).'],
+    'four.indFail': ['두 곳 모두 공업 지형 요건(경사 5% 이하 연속 10ha)은 미충족 — 대안의 공업용지는 경사 8% 이하까지 완화해 배치.', 'Nessuno dei due soddisfa il requisito morfologico industriale (pendenza ≤ 5% su 10 ha contigui): nelle alternative il suolo industriale è collocato fino all’8% di pendenza.'],
 
     'i6.slope': ['경사만 {0}% · {1}ha', 'Solo pendenza {0}% · {1} ha'],
-    'i6.note': ['후보지 A는 경사 15% 이하가 {0}%인데 남향(135~225°) 셀이 {1}%뿐이라, 세 조건을 모두 충족하는 셀은 크게 줄어듭니다. <b>향이 판정을 가릅니다.</b> DEM: {2} (90m 셀 재표본, 조회 {3}). 경사 2% 미만 평탄 셀은 향과 무관하게 봤고, 기준표고는 후보지 1km 안 기존 시가지의 평균 표고입니다(가정).',
-                'Nel sito A il {0}% delle celle ha pendenza ≤ 15%, ma solo il {1}% è esposto a sud (135–225°), quindi le celle che soddisfano tutte e tre le condizioni si riducono molto. <b>A decidere è l’esposizione.</b> DEM: {2} (ricampionato a celle di 90 m, consultato il {3}). Le celle quasi piane (pendenza < 2%) sono considerate indipendenti dall’esposizione; la quota di riferimento è la quota media dell’area urbanizzata esistente entro 1 km dal sito (ipotesi).'],
+    'i6.byAspect': ['<b>향이 판정을 가릅니다.</b>', '<b>A decidere è l’esposizione.</b>'],
+    'i6.bySlope': ['<b>경사가 판정을 가릅니다.</b>', '<b>A decidere è la pendenza.</b>'],
+    'i6.byNone': ['', ''],
+    'i6.note': ['후보지 A는 경사 15% 이하가 {0}%, 남향(135~225°) 셀이 {1}%입니다. {4} DEM: {2} (90m 셀 재표본, 조회 {3}). 경사 2% 미만 평탄 셀은 향과 무관하게 봤고, 기준표고는 후보지 1km 안 기존 시가지의 평균 표고입니다(가정).',
+                'Nel sito A il {0}% delle celle ha pendenza ≤ 15% e il {1}% è esposto a sud (135–225°). {4} DEM: {2} (ricampionato a celle di 90 m, consultato il {3}). Le celle quasi piane (pendenza < 2%) sono considerate indipendenti dall’esposizione; la quota di riferimento è la quota media dell’area urbanizzata esistente entro 1 km dal sito (ipotesi).'],
 
     'alt.popLine': ['수용 {0}명 (목표의 {1}%)', '{0} abitanti accolti ({1}% dell’obiettivo)'],
     'alt.item': ['항목', 'Voce'],
+    'alt.liveNote': ['목표인구는 부지 면적 × 60인/ha(동탄 예시 15,000명 ÷ 250ha), 공업·상업 면적은 동탄 프로그램을 부지 면적에 비례해 잡았습니다(가정).', 'La popolazione obiettivo è superficie del sito × 60 ab./ha (esempio Dongtan: 15.000 ab. ÷ 250 ha); le superfici industriali e commerciali seguono il programma di Dongtan in proporzione alla superficie (ipotesi).'],
     'alt.note': ['수용인구 = 주거 면적 × (1 − 도로·기반시설 {0}%) × 순밀도 {1}인/ha. 공원 확보기준 = max(인구 × 9㎡, 부지 × 12%) — 도시공원법 시행규칙 별표 2.',
                  'Popolazione accolta = superficie residenziale × (1 − strade e infrastrutture {0}%) × densità netta {1} ab./ha. Standard di parchi = max(popolazione × 9 m², sito × 12%) — Regolamento attuativo della Legge sui parchi urbani, Allegato 2.'],
 
@@ -96,9 +107,25 @@ window.I18N = {
     'rev.th': [['지표', '승인 가중치', '역전 가중치', '방향', '역전 후 1위', '여유폭 (%p)', ''],
                ['Indicatore', 'Peso approvato', 'Peso di inversione', 'Direzione', '1° dopo l’inversione', 'Margine (p.p.)', '']],
     'rev.btn': ['매트릭스에서 보기', 'Vedi nella matrice'],
-    'rev.note': ['가장 민감한 지표는 <b>{0}</b>입니다. 가중치가 {1}로 {2}%p만 움직여도 1위가 {3}로 바뀝니다. 따라서 절충안 채택은 <b>목표인구 {4}명이라는 상위계획 가정</b>이 유지될 때 견고합니다. \'매트릭스에서 보기\'를 누르면 역전 직후의 가중치가 위 슬라이더에 적용됩니다.',
-                 'L’indicatore più sensibile è <b>{0}</b>: basta che il peso passi {1}, cioè di soli {2} punti percentuali, perché il primo posto vada a {3}. La scelta dell’alternativa di compromesso è quindi solida <b>finché regge l’ipotesi del piano sovraordinato di {4} abitanti</b>. Premendo «Vedi nella matrice» i pesi subito dopo l’inversione vengono applicati ai cursori qui sopra.'],
+    'rev.noneNote': ['어느 지표의 가중치를 0~1로 바꿔도 1위({0})가 바뀌지 않습니다.', 'Qualunque peso si modifichi tra 0 e 1, il primo posto ({0}) non cambia.'],
+    'rev.note': ['가장 민감한 지표는 <b>{0}</b>입니다. 가중치가 {1}로 {2}%p만 움직여도 1위가 {3}로 바뀝니다. 따라서 {5} 채택은 <b>목표인구 {4}명이라는 가정</b>이 유지될 때 견고합니다. \'매트릭스에서 보기\'를 누르면 역전 직후의 가중치가 위 슬라이더에 적용됩니다.',
+                 'L’indicatore più sensibile è <b>{0}</b>: basta che il peso passi {1}, cioè di soli {2} punti percentuali, perché il primo posto vada a {3}. La scelta di {5} è quindi solida <b>finché regge l’ipotesi di {4} abitanti</b>. Premendo «Vedi nella matrice» i pesi subito dopo l’inversione vengono applicati ai cursori qui sopra.'],
 
+    's.sample': ['지금 보는 결과: <b>화성시 동탄구</b> (미리 계산한 예시)', 'Risultato visualizzato: <b>Dongtan-gu, Hwaseong</b> (esempio precalcolato)'],
+    's.live': ['지금 보는 결과: <b>{0}</b> (실시간 계산)', 'Risultato visualizzato: <b>{0}</b> (calcolo in tempo reale)'],
+    's.back': ['동탄 예시로', 'Torna a Dongtan'], 's.dl': ['결과 JSON', 'Risultati JSON'],
+    's.searching': ['검색 중…', 'Ricerca in corso…'],
+    'lvl.시군구': ['시군구', 'Città/contea'], 'lvl.읍면동': ['읍면동', 'Quartiere'],
+    'st.boundary': ['경계', 'Perimetro'], 'st.dem': ['DEM', 'DEM'], 'st.zoning': ['용도지역', 'Zonizzazione'], 'st.osm': ['도로·역', 'Strade e stazioni'],
+    'st.raster': ['격자', 'Griglia'], 'st.cands': ['후보지', 'Siti candidati'], 'st.factors': ['입지인자·⑥', 'Fattori e ⑥'],
+    'st.four': ['4축 표', 'Tabella 4 assi'], 'st.alloc': ['대안 3안', 'Alternative'], 'st.matrix': ['매트릭스', 'Matrice'],
+    'e.proxy': ['VWorld 프록시 주소가 설정되지 않았습니다. <code>docs/config.js</code>의 <code>PROXY_URL</code>에 Cloudflare Worker 주소를 넣어 주세요.', 'Indirizzo del proxy VWorld non configurato: inserire l’URL del Cloudflare Worker in <code>PROXY_URL</code> di <code>docs/config.js</code>.'],
+    'e.area': ['대상지 면적이 약 {0}km²로 한도({1}km²)를 넘습니다. 읍면동 단위로 검색해 주세요.', 'L’area è di circa {0} km² e supera il limite di {1} km²: cercare a livello di quartiere.'],
+    'e.nofree': ['대상지 안에 후보지로 쓸 미시가화지(주거·상업·공업 용도지역 밖의 땅)가 충분하지 않습니다. 더 넓은 시군구로 검색해 보세요.', 'Nell’area non c’è abbastanza suolo non urbanizzato (fuori dalle zone residenziali, commerciali e industriali) per due siti candidati: provare con una città o contea più ampia.'],
+    'e.net': ['네트워크 오류 — 프록시나 외부 자료 서버에 연결하지 못했습니다. 잠시 뒤 다시 시도해 주세요.', 'Errore di rete: impossibile raggiungere il proxy o i server dei dati. Riprovare tra poco.'],
+    'e.osm': ['OSM 도로·역 자료 서버(Overpass)가 지금 바쁩니다. 1~2분 뒤 같은 대상지를 다시 눌러 주세요.', 'Il server dei dati OSM su strade e stazioni (Overpass) è occupato: riprovare lo stesso luogo tra 1–2 minuti.'],
+    'e.none': ['"{0}"에 해당하는 시군구·읍면동이 없습니다.', 'Nessuna città, contea o quartiere corrisponde a «{0}».'],
+    'e.other': ['계산하지 못했습니다: {0}', 'Calcolo non riuscito: {0}'],
     'cat.th': [['레이어', 'status', '건수', '조회일', '요청 URL (인증키 제외)'], ['Livello', 'status', 'Record', 'Consultato il', 'URL della richiesta (senza chiave)']],
     'src': ['출처: VWorld 2D 데이터 API 2.0 (조회 {0}) · {1} · OpenStreetMap Overpass API (ODbL 1.0, 기준시각 {2}) · 《토지이용계획론》(2015) 원본 13~21·25~34번 · 「국토기본법」 제19조의2 · 「도시공원법 시행규칙」 별표 2·3.',
             'Fonti: VWorld 2D Data API 2.0 (consultata il {0}) · {1} · OpenStreetMap Overpass API (ODbL 1.0, dati al {2}) · 《토지이용계획론》 («Pianificazione dell’uso del suolo», 2015), diapositive originali n. 13–21 e 25–34 · Legge quadro sul territorio, art. 19-2 · Regolamento attuativo della Legge sui parchi urbani, Allegati 2 e 3.'],
@@ -190,6 +217,8 @@ window.I18N = {
     // 역전점 지표 = 기준 + 지표 이름 (두 줄을 합친 값)
     [/^(① 지역경쟁력|② 지역 간 균형발전|③ 기간시설 효율성|④ 자원 지속가능 관리|⑤ 저탄소 친환경|⑥ 종합계획 정합성) (.+)$/, (m, a, b) => `${window.I18N.FULL[a] || a} — ${window.I18N.FULL[b] || b}`],
     [/^0~1 전 구간에서 1위 유지$/, 'Primo posto mantenuto su tutto l’intervallo 0–1'],
+    [/^후보지 ([AB]) · (.+) 일대$/, 'Sito $1 · area di $2'], [/^(.+) 전체\(참고\)$/, 'Intero territorio di $1 (riferimento)'],
+    ['IC 없음(조회 범위 내)', 'nessuno svincolo nell’area'], ['하수처리시설 없음(조회 범위 내)', 'nessun depuratore nell’area'], ['이름 없음', 'senza nome'],
     [/(\d+)% 이하/g, '≤ $1%'], [/(\d+)% 초과/g, '> $1%'],
     ['기존 주거지역까지 평균', 'distanza media dalla residenza esistente'],
     ['기결정 공원·녹지', 'parchi e verde già pianificati'], ['포함', 'inclusi'],
