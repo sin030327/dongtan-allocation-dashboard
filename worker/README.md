@@ -1,5 +1,7 @@
 # VWorld 프록시 — Cloudflare Worker
 
+> **시도 기록 (2026-10-12)** — 배포까지 마쳤지만 VWorld가 Cloudflare 서버의 접속을 끊습니다. `/diag` 결과: 서울(ICN, `loc=KR`)에서 나가는 요청도 `https 520 · http 502`. 그래서 전국 검색은 이 프록시 대신 **전국 시군구 미리 계산**(`docs/regions/`)으로 제공합니다. 아래 `dev_proxy.py`는 그 계산을 이 PC에서 돌릴 때 씁니다.
+
 대시보드의 **전국 대상지 검색**이 VWorld 용도지역·행정경계와 OSM 도로·역 자료를 받을 때 거치는 작은 서버입니다.
 
 - 인증키는 Worker의 **비밀값**(`VWORLD_KEY`)으로만 들어가고, 코드·저장소·브라우저에는 나타나지 않습니다.
@@ -10,7 +12,11 @@
 |---|---|
 | `GET /data?data=LT_C_UQ111&geomFilter=BOX(...)&page=1` | VWorld 2D 데이터 API GetFeature 중계 (key·domain은 Worker가 붙임) |
 | `GET /overpass?data=[out:json]...` | OSM Overpass 미러 중계 |
+| `GET /geocode?q=주소` | gimi9 지오코더 중계 — 주소 → 좌표 (토큰은 Worker 비밀값 `GIMI9_TOKEN`) |
+| `GET /reverse?x=경도&y=위도` | gimi9 지오코더 중계 — 좌표 → 주소 |
 | `GET /health` | 동작 확인 |
+
+**지금 쓰는 곳**: 대시보드의 주소 검색(`/geocode`)과 좌표 위치의 주소 표시(`/reverse`). gimi9 토큰은 설명서가 공개 저장소에 넣지 말라고 하므로 Worker 비밀값으로만 둡니다 — `npx wrangler secret put GIMI9_TOKEN`.
 
 ## 배포 — 웹 화면만으로 (Node 설치 불필요)
 

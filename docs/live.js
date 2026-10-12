@@ -30,7 +30,7 @@ window.Live = (() => {
     while (true) {
       const q = new URLSearchParams({data: layer, size: 1000, page, geometry: 'true', ...params});
       const url = `${base}/data?${q}`;
-      const res = await fetch(url);
+      const res = await fetch(url, {signal: AbortSignal.timeout(90000)});   // 네트워크가 끊겨도 멈춰 있지 않게
       const j = await res.json();
       const r = j.response || {};
       if (page === 1 && log) log.push({layer, request_url_without_key: url, key_env: 'Worker 비밀값 VWORLD_KEY', queried_on: today(),
@@ -147,12 +147,12 @@ window.Live = (() => {
   }
 
   // ---------------- DEM
-  async function dem(g, note) {
+  async function dem(g, note, maxTiles = 64) {
     const [w, s, e, n] = g.bbox;
     const tile = (lon, lat, z) => { const t = 2 ** z; return [(lon + 180) / 360 * t, (1 - Math.asinh(Math.tan(lat * Math.PI / 180)) / Math.PI) / 2 * t]; };
     let z = 13;
     const count = z => { const [ax, ay] = tile(w, n, z), [bx, by] = tile(e, s, z); return (Math.floor(bx) - Math.floor(ax) + 1) * (Math.floor(by) - Math.floor(ay) + 1); };
-    while (count(z) > 64 && z > 10) z--;
+    while (count(z) > maxTiles && z > 10) z--;
     const [ax, ay] = tile(w, n, z), [bx, by] = tile(e, s, z);
     const tx0 = Math.floor(ax), ty0 = Math.floor(ay), tx1 = Math.floor(bx), ty1 = Math.floor(by);
     const tiles = new Map(), jobs = [];
@@ -161,7 +161,7 @@ window.Live = (() => {
     const worker = async () => {
       while (jobs.length) {
         const [tx, ty] = jobs.shift();
-        const res = await fetch(TILE.replace('{z}', z).replace('{x}', tx).replace('{y}', ty));
+        const res = await fetch(TILE.replace('{z}', z).replace('{x}', tx).replace('{y}', ty), {signal: AbortSignal.timeout(60000)});
         const bmp = await createImageBitmap(await res.blob());
         const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
         const ctx = cv.getContext('2d', {willReadFrequently: true}); ctx.drawImage(bmp, 0, 0);
@@ -202,33 +202,50 @@ window.Live = (() => {
     return {E, S, A, z, tiles: (tx1 - tx0 + 1) * (ty1 - ty0 + 1)};
   }
 
-  // ---------------- OSM
-  async function osm(g) {
-    const [w, s, e, n] = g.bbox;
-    const b = `${s},${w},${n},${e}`;
-    const q = `[out:json][timeout:120];(way["highway"~"^(motorway|trunk|primary)$"](${b});node["highway"="motorway_junction"](${b});node["railway"="station"](${b});nwr["man_made"="wastewater_plant"](${b}););out geom tags;`;
-    // 프록시 경유(미러 4곳을 서버에서 차례로 시도·캐시) — 실패하면 한 번 더
-    let j = null, endpoint = '';
-    for (let attempt = 0; attempt < 2 && !j; attempt++) {
-      try {
-        const r = await fetch(`${proxy()}/overpass?data=${encodeURIComponent(q)}`);
-        if (r.ok) { j = await r.json(); endpoint = j._endpoint || 'Overpass'; }
-      } catch (err) { /* 재시도 */ }
-      if (!j) await new Promise(res => setTimeout(res, 3000));
-    }
-    if (!j) throw new Error('OSM');
-    const roads = [], ic = [], st = [], ww = [];
-    for (const el of j.elements) {
-      const t = el.tags || {};
-      if (el.type === 'way' && t.highway && el.geometry) roads.push(el.geometry.map(p => [p.lon, p.lat]));
-      else if (t.highway === 'motorway_junction') ic.push({name: t.name || '', lon: el.lon, lat: el.lat});
-      else if (t.railway === 'station') st.push({name: (t.name || '') + '역', lon: el.lon, lat: el.lat});
-      else if (t.man_made === 'wastewater_plant') {
-        const bb = el.bounds; if (bb) ww.push({name: '공공하수처리시설', lon: (bb.minlon + bb.maxlon) / 2, lat: (bb.minlat + bb.maxlat) / 2});
-        else if (el.lon) ww.push({name: '공공하수처리시설', lon: el.lon, lat: el.lat});
+  // ---------------- 접근성 자료 — 공식 자료(VWorld) 우선
+  // 간선도로: 국토부 표준노드링크 LT_L_MOCTLINK (시·군도 제외 도로등급)
+  // IC·JC  : 표준노드 LT_P_MOCTNODE 중 연결로접속부, 이름에 IC·JC·나들목·분기점
+  // 하수처리: 도시계획시설 환경기초시설 LT_C_UPISUQ158 중 하수·폐수종말처리시설
+  // 철도역  : VWorld 에 없음 — OSM 전국 역 목록을 한 번 받아 둔 정적 파일(stations_kr.json)
+  const ARTERIAL_RANKS = ['고속국도', '도시고속국도', '일반국도', '특별·광역시도', '국가지원지방도', '지방도'];
+  let STATIONS = null;
+  async function access(g, boxStr, log) {
+    const lines = [];
+    for (const rank of ARTERIAL_RANKS) {
+      const f = await vworld('LT_L_MOCTLINK', {geomFilter: boxStr, attrFilter: `rd_rank_h:=:${rank}`}, log);
+      for (const x of f) {
+        const gm = x.geometry; if (!gm) continue;
+        if (gm.type === 'LineString') lines.push(gm.coordinates);
+        else if (gm.type === 'MultiLineString') gm.coordinates.forEach(c => lines.push(c));
       }
     }
-    return {roads, ic, st, ww, base: j.osm3s && j.osm3s.timestamp_osm_base, endpoint, query: q};
+    const nodes = await vworld('LT_P_MOCTNODE', {geomFilter: boxStr, attrFilter: 'nd_type_h:=:연결로접속부'}, log);
+    const icMap = new Map();
+    for (const x of nodes) {
+      const nm = String(x.properties.node_name || '').trim();
+      if (!/(IC|JC|나들목|분기점)/.test(nm) || /(앞|입구|교차로)$/.test(nm)) continue;
+      const base = nm.replace(/\s*\(.*\)\s*$/, '');
+      const c = x.geometry && x.geometry.coordinates; if (!c) continue;
+      const pt = Array.isArray(c[0]) ? c[0] : c;
+      const e = icMap.get(base) || {name: base, lon: 0, lat: 0, n: 0};
+      e.lon += pt[0]; e.lat += pt[1]; e.n++; icMap.set(base, e);
+    }
+    const ic = [...icMap.values()].map(e => ({name: e.name, lon: e.lon / e.n, lat: e.lat / e.n}));
+    const env = await vworld('LT_C_UPISUQ158', {geomFilter: boxStr}, log);
+    const ww = [];
+    for (const x of env) {
+      const m = x.properties.mls_nam || '';
+      if (!/(하수종말처리|폐수종말처리)/.test(m)) continue;
+      let sx = 0, sy = 0, n = 0; eachCoord(x.geometry, ([lon, lat]) => { sx += lon; sy += lat; n++; });
+      if (n) ww.push({name: m, lon: sx / n, lat: sy / n});
+    }
+    if (!STATIONS) STATIONS = await (await fetch('stations_kr.json')).json();
+    const [w, s, e, n] = g.bbox, pad = 0.2;
+    const st = STATIONS.stations.filter(([, lon, lat]) => lon > w - pad && lon < e + pad && lat > s - pad && lat < n + pad)
+      .map(([name, lon, lat]) => ({name: (name || '').replace(/역$/, '') + '역', lon, lat}));
+    log.push({layer: '철도역 (OSM 전국 목록)', request_url_without_key: STATIONS.endpoint, key_env: '—', queried_on: STATIONS.queried_on, status: 'OK',
+      record_total: st.length, note: `OSM 기준시각 ${STATIONS.osm_base || ''} · ODbL 1.0`});
+    return {roads: lines, ic, st, ww, base: STATIONS.osm_base};
   }
 
   // ---------------- 보조
@@ -305,7 +322,7 @@ window.Live = (() => {
       p => [isFinite(p.icMin) ? `IC 최단 ${f0(p.icMin)}m(${p.icName})` : 'IC 없음(조회 범위 내)', j(p.icMin <= 2000)]);
     add('공업', '주변환경', '공업지는 시가지와 떨어뜨리고 완충녹지와 확장 여지를 둔다', '기존 주거지 평균거리 ≥ 500m', '원본 21번 · 시행령 제30조',
       p => [`기존 주거지 ${f0(p.res)}m`, j(p.res >= 500, p.res >= 300)]);
-    add('공업', '기반시설', '공업지는 폐수·폐기물 처리가 쉽고 용수·동력을 확보할 수 있는 곳에 둔다', '공공하수처리시설 ≤ 5km(OSM 기재 시설 기준)', '원본 21번',
+    add('공업', '기반시설', '공업지는 폐수·폐기물 처리가 쉽고 용수·동력을 확보할 수 있는 곳에 둔다', '하수·폐수종말처리시설 ≤ 5km(도시계획시설 기준)', '원본 21번',
       p => [isFinite(p.ww) ? `하수처리시설 ${(p.ww / 1000).toFixed(1)}km` : '하수처리시설 없음(조회 범위 내)', j(p.ww <= 5000)]);
     const pt = {'○': 2, '△': 1, '×': 0};
     const summ = ['녹지', '상업업무', '주거', '공업'].map(use => {
@@ -352,7 +369,8 @@ window.Live = (() => {
   }
 
   // ---------------- 전체 파이프라인
-  async function analyze(item, base, onStep) {
+  async function analyze(item, base, onStep, opt = {}) {
+    const maxKm2 = opt.maxKm2 || MAX_KM2, maxTiles = opt.maxTiles || 64;
     const log = [];
     const step = (k, msg) => onStep && onStep(k, msg);
     const W = JSON.parse(JSON.stringify(base.weights));
@@ -364,11 +382,11 @@ window.Live = (() => {
     const g = makeGrid(geom);
     const mask = fillGeoms(g, [geom]);
     const areaKm2 = idx(mask).length * CELL_HA / 100;
-    if (areaKm2 > MAX_KM2) throw new Error(`AREA:${Math.round(areaKm2)}`);
+    if (areaKm2 > maxKm2) throw new Error(`AREA:${Math.round(areaKm2)}`);
     const boxStr = `BOX(${g.bbox.map(v => v.toFixed(5)).join(',')})`;
 
     step('dem', 'DEM 내려받기');
-    const D = await dem(g, msg => step('dem', msg));
+    const D = await dem(g, msg => step('dem', msg), maxTiles);
     const {E, S, A} = D;
 
     step('zoning', '용도지역 · 공원녹지 · 하천 (VWorld)');
@@ -437,11 +455,9 @@ window.Live = (() => {
     const emd = await Promise.all(candMask.map(emdAt));
     const candName = ['A', 'B'].map((k, i) => `후보지 ${k} · ${emd[i] || '이름 없음'} 일대`);
 
-    // OSM 은 후보지가 정해진 뒤에 받는다 — 미시가화지가 없는 대상지는 여기까지 오지 않아 빨리 끝남
-    step('osm', '간선도로 · IC · 철도역 (OSM)');
-    const O = await osm(g);
-    log.push({layer: 'OSM Overpass', request_url_without_key: O.endpoint, key_env: '—', queried_on: today(), status: 'OK',
-      record_total: O.roads.length + O.ic.length + O.st.length + O.ww.length, note: `OSM 기준시각 ${O.base || ''} · ODbL 1.0`});
+    // 접근성 자료는 후보지가 정해진 뒤에 받는다 — 미시가화지가 없는 대상지는 여기까지 오지 않아 빨리 끝남
+    step('osm', '간선도로 · IC · 하수처리시설 (VWorld) · 철도역');
+    const O = await access(g, boxStr, log);
     log.push({layer: 'DEM (AWS Terrain Tiles)', request_url_without_key: TILE.replace('{z}', D.z), key_env: '—', queried_on: today(), status: 'OK', record_total: D.tiles, note: `z${D.z} 타일 → 90m 셀 평균`});
 
     const art = O.roads.length ? strokeLines(g, O.roads) : new Uint8Array(g.n);
@@ -472,7 +488,7 @@ window.Live = (() => {
       };
       P.row = {
         '이름': name, '면적(ha·폴리곤)': P.area, '격자 셀 수': n, '격자 면적(ha)': P.area,
-        '표고 최저(m)': r1(Math.min(...cells.map(p => E[p]))), '표고 평균(m)': r1(P.elev), '표고 최고(m)': r1(Math.max(...cells.map(p => E[p]))),
+        '표고 최저(m)': r1(cells.reduce((m, p) => Math.min(m, E[p]), Infinity)), '표고 평균(m)': r1(P.elev), '표고 최고(m)': r1(cells.reduce((m, p) => Math.max(m, E[p]), -Infinity)),
         '기반시설 기준표고(m)': r1(ref), '경사 평균(%)': r1(mean(cells.map(p => S[p]))),
         '경사 ≤5% 비율(%)': P.s5, '경사 ≤10% 비율(%)': P.s10, '경사 ≤15% 비율(%)': P.s15, '경사 >25% 비율(%)': P.s25,
         '남향(135~225°) 셀 비율(%)': P.south, '간선도로 평균거리(m)': Math.round(P.art),
@@ -604,11 +620,69 @@ window.Live = (() => {
         dem: 'AWS Terrain Tiles (terrarium) — Mapzen/Tilezen, SRTM·기타 공개 DEM 합성', osm_base: O.base, allocSite: pickKey},
       geo, weights: W, alternatives: altRows, fourAxis: F.rows, fourAxisSummary: F.summ, indicator6: i6rows,
       siteFactors: {A: PA.row, B: PB.row, GU: PG.row}, reversal: rev, catalog: log,
-      raster: {nx: g.nx, ny: g.ny, bounds: [[g.bbox[1], g.bbox[0]], [g.bbox[3], g.bbox[2]]], mask, zone, i6: i6cls, plans, allocMask: m,
-        cell: (lat, lon) => { const [x, y] = merc(lon, lat); const j = Math.floor((x - g.x0) / g.c), i = Math.floor((g.y1 - y) / g.c); return (i < 0 || j < 0 || i >= g.ny || j >= g.nx) ? -1 : i * g.nx + j; },
-        S, A, E},
+      raster: {nx: g.nx, ny: g.ny, x0: g.x0, y1: g.y1, c: g.c, bounds: [[g.bbox[1], g.bbox[0]], [g.bbox[3], g.bbox[2]]], mask, zone, i6: i6cls, plans, allocMask: m,
+        cell: cellFn(g.x0, g.y1, g.c, g.nx, g.ny), S, A, E},
     };
   }
 
-  return {search, analyze, proxy, MAX_KM2};
+  // ---------------- 저장 · 불러오기 (전국 시군구 미리 계산 결과)
+  function cellFn(x0, y1, c, nx, ny) {
+    return (lat, lon) => { const [x, y] = merc(lon, lat); const j = Math.floor((x - x0) / c), i = Math.floor((y1 - y) / c); return (i < 0 || j < 0 || i >= ny || j >= nx) ? -1 : i * nx + j; };
+  }
+  const b64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+  const unb64 = s => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
+  // 더글러스-포이커 단순화 (경위도, tol 도 단위)
+  function rdp(pts, tol) {
+    if (pts.length < 3) return pts;
+    const keep = new Uint8Array(pts.length); keep[0] = keep[pts.length - 1] = 1;
+    const st = [[0, pts.length - 1]];
+    while (st.length) {
+      const [a, b] = st.pop(); let md = 0, mi = -1;
+      const [ax, ay] = pts[a], [bx, by] = pts[b], dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy;
+      for (let i = a + 1; i < b; i++) {
+        const [px, py] = pts[i];
+        let t = L ? ((px - ax) * dx + (py - ay) * dy) / L : 0; t = Math.max(0, Math.min(1, t));
+        const d = Math.hypot(px - ax - t * dx, py - ay - t * dy);
+        if (d > md) { md = d; mi = i; }
+      }
+      if (md > tol && mi > 0) { keep[mi] = 1; st.push([a, mi], [mi, b]); }
+    }
+    return pts.filter((_, i) => keep[i]).map(([x, y]) => [Math.round(x * 1e5) / 1e5, Math.round(y * 1e5) / 1e5]);
+  }
+  function simplifyGeom(geom, tol) {
+    const ring = r => { const o = rdp(r, tol); return o.length >= 4 ? o : r; };
+    if (geom.type === 'Polygon') return {type: 'Polygon', coordinates: geom.coordinates.map(ring)};
+    if (geom.type === 'MultiPolygon') return {type: 'MultiPolygon', coordinates: geom.coordinates.map(p => p.map(ring))};
+    if (geom.type === 'MultiLineString') return {type: 'MultiLineString', coordinates: geom.coordinates.map(l => rdp(l, tol)).filter(l => l.length >= 2)};
+    return geom;
+  }
+  const VW_PUBLIC = 'https://api.vworld.kr/req/data';
+  function serialize(D) {
+    const R = D.raster, n = R.nx * R.ny;
+    const S8 = new Uint8Array(n), A8 = new Uint8Array(n), E16 = new Uint8Array(n * 2);
+    for (let p = 0; p < n; p++) {
+      if (!R.mask[p]) continue;
+      S8[p] = Math.min(255, Math.round(R.S[p]));
+      A8[p] = Math.round(R.A[p] / 2) % 180;
+      const e = Math.max(0, Math.min(65535, Math.round(isNaN(R.E[p]) ? 0 : R.E[p] + 100)));
+      E16[p * 2] = e & 255; E16[p * 2 + 1] = e >> 8;
+    }
+    const geo = {...D.geo, gu: simplifyGeom(D.geo.gu, 0.00015), arterial: simplifyGeom(D.geo.arterial, 0.0003)};
+    // 요청 기록은 프록시 주소 대신 VWorld 원 주소(인증키 제외)로 남김
+    const catalog = D.catalog.map(r => ({...r, request_url_without_key: String(r.request_url_without_key).replace(/^https?:\/\/[^/]+\/data\?/, `${VW_PUBLIC}?service=data&version=2.0&request=GetFeature&format=json&crs=EPSG:4326&domain=localhost&`),
+      key_env: r.key_env && r.key_env.includes('VWORLD') ? 'VWORLD_KEY' : r.key_env}));
+    return {v: 1, ...D, geo, catalog, raster: {nx: R.nx, ny: R.ny, x0: R.x0, y1: R.y1, c: R.c, bounds: R.bounds,
+      mask: b64(R.mask), zone: b64(R.zone), i6: b64(R.i6), plans: R.plans.map(b64), allocMask: b64(R.allocMask),
+      S: b64(S8), A: b64(A8), E: b64(E16)}};
+  }
+  function deserialize(J) {
+    const R = J.raster, n = R.nx * R.ny;
+    const S8 = unb64(R.S), A8 = unb64(R.A), E16 = unb64(R.E);
+    const S = new Float64Array(n), A = new Float64Array(n), E = new Float64Array(n);
+    for (let p = 0; p < n; p++) { S[p] = S8[p]; A[p] = A8[p] * 2; E[p] = E16[p * 2] + (E16[p * 2 + 1] << 8) - 100; }
+    return {...J, raster: {nx: R.nx, ny: R.ny, bounds: R.bounds, mask: unb64(R.mask), zone: unb64(R.zone), i6: unb64(R.i6),
+      plans: R.plans.map(unb64), allocMask: unb64(R.allocMask), cell: cellFn(R.x0, R.y1, R.c, R.nx, R.ny), S, A, E}};
+  }
+
+  return {search, analyze, proxy, MAX_KM2, serialize, deserialize, vworld};
 })();

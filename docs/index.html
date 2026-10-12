@@ -142,8 +142,8 @@ footer { color: var(--muted); font-size: .8rem; padding: 30px 0 40px; }
   <section id="search">
     <div class="card srch">
       <div class="flex"><h2 style="margin:0" data-i18n="s.h">대상지 검색 — 전국</h2><span class="crit" id="srchMode"></span></div>
-      <p class="lead" style="margin:6px 0 10px" data-i18n="s.lead">시군구·읍면동 이름으로 검색해 고르면, 그 경계에서 후보지 2곳 선정부터 매트릭스·역전점까지 동탄과 같은 규칙으로 브라우저에서 다시 계산합니다. 1~3분 걸립니다.</p>
-      <div class="srow"><input id="srchInput" type="search" placeholder="예: 세종, 판교동, 춘천시, 강릉" data-i18n-ph="s.ph" autocomplete="off"><button class="btn primary" id="srchBtn" data-i18n="s.btn">검색</button></div>
+      <p class="lead" style="margin:6px 0 10px" data-i18n="s.lead">시군구·읍면동 이름, 좌표(위도, 경도), 주소로 검색하세요. 전국 시군구마다 동탄과 같은 VWorld 자료·같은 규칙으로 후보지 2곳 선정부터 매트릭스·역전점까지 미리 계산해 두었습니다. 읍면동·좌표·주소는 그곳이 속한 시군구 결과를 열고 지도에 위치를 표시합니다.</p>
+      <div class="srow"><input id="srchInput" type="search" placeholder="예: 세종 · 판교동 · 37.1498, 127.0773 · 경기도 오산시 오산로 1" data-i18n-ph="s.ph" autocomplete="off"><button class="btn primary" id="srchBtn" data-i18n="s.btn">검색</button></div>
       <div class="chips" id="srchList" style="margin-top:10px"></div>
       <div id="srchProg"></div>
       <div id="srchErr"></div>
@@ -238,10 +238,10 @@ footer { color: var(--muted); font-size: .8rem; padding: 30px 0 40px; }
 <footer class="wrap" id="foot"></footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="data.js?v=20261012e"></script>
-<script src="i18n.js?v=20261012e"></script>
-<script src="config.js?v=20261012e"></script>
-<script src="live.js?v=20261012e"></script>
+<script src="data.js?v=20261012f"></script>
+<script src="i18n.js?v=20261012f"></script>
+<script src="config.js?v=20261012f"></script>
+<script src="live.js?v=20261012f"></script>
 <script>
 (() => {
 const I = window.I18N, BASE = window.DATA;
@@ -355,8 +355,11 @@ const zoneName = g => IT() ? tv(g) : g + T('zoneSuffix');
 const map = L.map('map', {scrollWheelZoom: false, zoomSnap: 0.25});
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 18, attribution: '© OpenStreetMap contributors'}).addTo(map);
 let guLayer, candLayer, artLayer, ptLayer, viewLayer = null, view = 'zoning', i6th = 15, altIdx = 2;
+let searchMarker = null;
 function buildBase() {
-  [guLayer, candLayer, artLayer, ptLayer].forEach(l => l && map.removeLayer(l));
+  [guLayer, candLayer, artLayer, ptLayer, searchMarker].forEach(l => l && map.removeLayer(l));
+  searchMarker = D.meta.point ? L.circleMarker([D.meta.point.lat, D.meta.point.lon], {radius: 9, color: '#fff', weight: 3, fillColor: '#c1121f', fillOpacity: 1})
+    .bindTooltip(`${T('s.point')}: ${esc(D.meta.point.label)}`, {direction: 'top'}).addTo(map) : null;
   guLayer = L.geoJSON(D.geo.gu, {style: () => ({color: css('--ink'), weight: 2, fill: false}), interactive: false});
   candLayer = L.geoJSON(D.geo.candidates, {style: () => ({color: '#c1121f', weight: 2.5, fill: false, dashArray: D.meta.live ? null : '6 4'})});
   artLayer = L.geoJSON(D.geo.arterial, {style: {color: '#555', weight: 1.4, opacity: .8}, interactive: false});
@@ -432,6 +435,7 @@ function drawView(fit = true) {
     const feats = D.geo.candidates.features.filter(f => view === 'i6' || f.properties.id === allocKey());
     map.fitBounds(L.geoJSON(feats).getBounds(), {padding: [20, 20]});
   } else map.fitBounds(guLayer.getBounds(), {padding: [10, 10]});
+  if (searchMarker) searchMarker.bringToFront();
 }
 $('viewSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
   view = b.dataset.v; $('viewSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); drawView();
@@ -541,18 +545,19 @@ function renderRecord() {
 function renderAll(fit = true) { renderHead(); labelOverlays(); drawView(fit); renderFour(); renderI6(); renderAlts(); renderMatrix(); renderBands(); renderRev(); renderRecord(); }
 
 // ---------- 전국 대상지 검색
+const VER = '20261012f';
 const STEPS = ['boundary', 'dem', 'zoning', 'raster', 'cands', 'osm', 'factors', 'four', 'alloc', 'matrix'];
 let searchState = {results: [], busy: false, step: null, msg: '', err: null};
 function renderSearchState() {
   const st = searchState;
   $('srchMode').innerHTML = D.meta.live
-    ? `${T('s.live', esc(D.meta.siteName))} <button class="btn" id="srchBack">${T('s.back')}</button> <button class="btn" id="srchDl">${T('s.dl')}</button>`
+    ? `${D.meta.precomputed ? T('s.pre', esc(D.meta.siteName), esc(D.meta.queried_on)) : T('s.live', esc(D.meta.siteName))}${D.meta.fromEmd ? ' · ' + T('s.fromEmd', esc(D.meta.fromEmd)) : ''} <button class="btn" id="srchBack">${T('s.back')}</button> <button class="btn" id="srchDl">${T('s.dl')}</button>`
     : T('s.sample');
   if ($('srchBack')) $('srchBack').onclick = () => { setData(BASE); buildBase(); renderSearchState(); renderAll(); };
   if ($('srchDl')) $('srchDl').onclick = downloadJson;
-  $('srchList').innerHTML = st.results.map((r, i) => `<button class="chip" data-i="${i}" ${st.busy ? 'disabled' : ''}><span class="crit">${T('lvl.' + r.level)}</span> ${esc(r.name)}</button>`).join('');
+  $('srchList').innerHTML = st.results.map((r, i) => `<button class="chip" data-i="${i}" ${st.busy ? 'disabled' : ''} title="${r.sig && !r.sig.ok ? esc(T('s.noData')) : ''}" style="${r.sig && !r.sig.ok ? 'opacity:.55' : ''}"><span class="crit">${T('lvl.' + r.level)}</span> ${esc(r.name)}${r.level === '읍면동' && r.sig ? ` <span class="crit">→ ${esc(r.sig.name.split(' ').slice(1).join(' '))}</span>` : ''}</button>`).join('');
   $('srchList').querySelectorAll('button').forEach(b => b.onclick = () => run(st.results[+b.dataset.i]));
-  $('srchProg').innerHTML = st.busy ? `<div class="steps">${STEPS.map(s => `<span class="${s === st.step ? 'on' : STEPS.indexOf(s) < STEPS.indexOf(st.step) ? 'done' : ''}">${T('st.' + s)}</span>`).join('')}</div><div class="crit">${esc(st.msg)}</div>` : '';
+  $('srchProg').innerHTML = st.busy && !st.step ? `<div class="crit" style="margin-top:10px">${esc(st.msg)}</div>` : st.busy ? `<div class="steps">${STEPS.map(s => `<span class="${s === st.step ? 'on' : STEPS.indexOf(s) < STEPS.indexOf(st.step) ? 'done' : ''}">${T('st.' + s)}</span>`).join('')}</div><div class="crit">${esc(st.msg)}</div>` : '';
   $('srchErr').innerHTML = st.err ? `<div class="callout warnbox">${st.err}</div>` : '';
   $('srchBtn').disabled = st.busy;
 }
@@ -562,23 +567,119 @@ function errText(e) {
   if (m.startsWith('AREA:')) return T('e.area', m.slice(5), window.Live.MAX_KM2);
   if (m === 'NOFREE') return T('e.nofree');
   if (m === 'OSM') return T('e.osm');
+  if (m === 'NODATA') return T('e.nodata');
+  if (m === 'OUTSIDE') return T('e.outside');
+  if (m === 'NOADDR') return T('e.noaddr');
+  if (m === 'NOGEO') return T('e.nogeo');
+  if (m === 'GEOFAIL') return T('e.geofail');
   if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return T('e.net');
   return T('e.other', esc(m));
+}
+let INDEX = null;
+async function loadIndex() {
+  if (INDEX) return INDEX;
+  const r = await fetch('regions/index.json?v=' + VER);
+  if (!r.ok) throw new Error('INDEX');
+  INDEX = await r.json();
+  INDEX.sigBy = Object.fromEntries(INDEX.sig.map(x => [x.code, x]));
+  return INDEX;
+}
+function searchIndex(ix, q) {
+  const norm = t => t.replace(/\s+/g, '');
+  const k = norm(q), out = [];
+  for (const sg of ix.sig) if (norm(sg.name).includes(k)) out.push({level: '시군구', code: sg.code, name: sg.name, sig: sg});
+  for (const [code, name] of ix.emd) {
+    if (out.length >= 40) break;
+    const last = name.split(' ').pop();
+    if (norm(last).includes(k)) { const sg = ix.sigBy[code.slice(0, 5)]; if (sg) out.push({level: '읍면동', code, name, sig: sg}); }
+  }
+  return out.slice(0, 40);
+}
+// 좌표: "37.15, 127.07" 또는 "127.07 37.15" (순서 자동 판별, 대한민국 범위)
+function parseCoord(q) {
+  const m = q.trim().match(/^(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  const a = +m[1], b = +m[2];
+  if (a > 33 && a < 39 && b > 124 && b < 132) return {lat: a, lon: b};
+  if (b > 33 && b < 39 && a > 124 && a < 132) return {lat: b, lon: a};
+  return 'OUTSIDE';
+}
+let BOUNDS = null;
+async function sigAt(lat, lon) {   // 시군구 경계(단순화)로 점 포함 판정
+  if (!BOUNDS) BOUNDS = await (await fetch('sig_bounds.json?v=' + VER)).json();
+  const inRing = (r) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) c = !c; } return c; };
+  const inPoly = rings => inRing(rings[0]) && !rings.slice(1).some(inRing);
+  for (const [code, name, g] of BOUNDS.sig) {
+    const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+    if (polys.some(inPoly)) return {code, name};
+  }
+  return null;
+}
+const geoBase = () => (window.GEOCODER_URL || '').replace(/\/$/, '');
+async function geocoder(path, params) {
+  if (!geoBase()) throw new Error('NOGEO');
+  const r = await fetch(`${geoBase()}/${path}?${new URLSearchParams(params)}`);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(r.status === 500 && /TOKEN/.test(j.error || '') ? 'NOGEO' : 'GEOFAIL');
+  return j;
+}
+// gimi9 응답에서 좌표 · 주소를 꺼냄 (필드 이름이 바뀌어도 견디게 넓게 찾음)
+function pickXY(j) {
+  const seen = [j]; while (seen.length) { const o = seen.shift(); if (!o || typeof o !== 'object') continue;
+    const x = +(o.x ?? o.lon ?? o.lng ?? o.longitude), y = +(o.y ?? o.lat ?? o.latitude);
+    if (x > 124 && x < 132 && y > 33 && y < 39) return {lon: x, lat: y, addr: o.address || o.addr || o.road_address || o.jibun_address || o.inputaddr || ''};
+    for (const v of Object.values(o)) if (v && typeof v === 'object') seen.push(v); }
+  return null;
+}
+function pickAddr(j) {
+  const seen = [j]; while (seen.length) { const o = seen.shift(); if (!o || typeof o !== 'object') continue;
+    for (const k of ['road_address', 'address', 'jibun_address', 'addr', 'full_address']) if (typeof o[k] === 'string' && o[k]) return o[k];
+    for (const v of Object.values(o)) if (v && typeof v === 'object') seen.push(v); }
+  return '';
+}
+async function pointResult(pt, level, label) {
+  const sg = await sigAt(pt.lat, pt.lon);
+  if (!sg) throw new Error('OUTSIDE');
+  const ix = await loadIndex();
+  let addr = pt.addr || '';
+  if (!addr) { try { addr = pickAddr(await geocoder('reverse', {x: pt.lon, y: pt.lat})); } catch (e) { /* 주소 표시는 선택 */ } }
+  return [{level, code: sg.code, name: `${label}${addr ? ' · ' + addr : ''} → ${sg.name}`, sig: ix.sigBy[sg.code] || {code: sg.code, name: sg.name, ok: false},
+    point: {lat: pt.lat, lon: pt.lon, label: addr || label}}];
 }
 async function doSearch() {
   const q = $('srchInput').value;
   if (!q.trim()) return;
   searchState = {results: [], busy: true, step: null, msg: T('s.searching'), err: null}; renderSearchState();
   try {
-    const res = await window.Live.search(q);
+    let res;
+    const pc = parseCoord(q);
+    if (pc === 'OUTSIDE') throw new Error('OUTSIDE');
+    if (pc) res = await pointResult(pc, '좌표', `${pc.lat.toFixed(5)}, ${pc.lon.toFixed(5)}`);
+    else if (/\d/.test(q) || /(로|길)\s*\d|번지/.test(q)) {
+      const hit = pickXY(await geocoder('geocode', {q: q.trim()}));
+      if (!hit) throw new Error('NOADDR');
+      res = await pointResult(hit, '주소', q.trim());
+    } else try { res = searchIndex(await loadIndex(), q); }
+    catch (e) { if (e.message !== 'INDEX') throw e; res = (await window.Live.search(q)).map(r => ({...r, liveItem: r})); }
     searchState = {results: res, busy: false, step: null, msg: '', err: res.length ? null : T('e.none', esc(q))};
   } catch (e) { searchState = {results: [], busy: false, step: null, msg: '', err: errText(e)}; }
   renderSearchState();
 }
 async function run(item) {
-  searchState.busy = true; searchState.err = null; searchState.step = 'boundary'; searchState.msg = ''; renderSearchState();
+  searchState.busy = true; searchState.err = null; searchState.step = item.liveItem ? 'boundary' : null; searchState.msg = T('s.loading'); renderSearchState();
   try {
-    const nd = await window.Live.analyze(item, BASE, (s, msg) => { searchState.step = s; searchState.msg = msg; renderSearchState(); });
+    let nd;
+    if (item.liveItem) nd = await window.Live.analyze(item.liveItem, BASE, (s, msg) => { searchState.step = s; searchState.msg = msg; renderSearchState(); });
+    else {
+      if (!item.sig.ok) throw new Error(item.sig.error || 'NODATA');
+      const r = await fetch(`regions/${item.sig.code}.json.gz?v=${INDEX.built}`);
+      if (!r.ok) throw new Error('NODATA');
+      const txt = await new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).text();
+      nd = window.Live.deserialize(JSON.parse(txt));
+      nd.meta.precomputed = true; nd.meta.built = INDEX.built;
+      if (item.level === '읍면동') nd.meta.fromEmd = item.name;
+      if (item.point) nd.meta.point = item.point;
+    }
     setData(nd); buildBase(); view = 'zoning'; altIdx = 2;
     $('viewSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === 'zoning'));
     searchState = {results: searchState.results, busy: false, step: null, msg: '', err: null};

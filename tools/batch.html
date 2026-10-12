@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>전국 시군구 일괄 계산</title>
+<style>
+:root { --bg: #f5f7fa; --ink: #1b2430; --muted: #5d6b7a; --line: #dfe4ea; --ok: #1d7a3a; --no: #c1121f; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0f141a; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2a3440; --ok: #5cc27a; --no: #ff6b6b; } }
+:root[data-theme="dark"] { --bg: #0f141a; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2a3440; --ok: #5cc27a; --no: #ff6b6b; }
+body { margin: 0; padding: 16px; background: var(--bg); color: var(--ink); font: 14px/1.5 "Malgun Gothic", system-ui, sans-serif; }
+h1 { font-size: 1.2rem; margin: 0 0 6px; }
+.muted { color: var(--muted); font-size: .85rem; }
+button { font: inherit; padding: 6px 14px; margin: 8px 6px 8px 0; cursor: pointer; }
+#log { font: 12px/1.6 Consolas, monospace; white-space: pre-wrap; border-top: 1px solid var(--line); padding-top: 8px; max-height: 70vh; overflow: auto; }
+.ok { color: var(--ok); } .no { color: var(--no); }
+</style>
+</head>
+<body>
+<h1>전국 시군구 일괄 계산 (개발 전용)</h1>
+<div class="muted">worker/dev_proxy.py 가 켜져 있어야 합니다. 결과는 docs/regions/{시군구코드}.json 으로 저장되고, 이미 저장된 곳은 건너뜁니다.</div>
+<button id="start">시작</button><button id="stop">멈춤</button><span id="stat" class="muted"></span>
+<div id="log"></div>
+<script src="data.js"></script>
+<script src="live.js"></script>
+<script>
+const P = 'http://localhost:8787';
+const KOREA = 'BOX(124,33,132,39)';
+const $ = id => document.getElementById(id);
+let running = false;
+window.__batch = {done: 0, ok: 0, fail: 0, total: 0, current: '', finished: false, results: []};
+const log = (t, cls) => { const d = document.createElement('div'); d.textContent = t; if (cls) d.className = cls; $('log').prepend(d); };
+const save = (name, obj) => fetch(`${P}/save?name=${name}`, {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(obj)}).then(r => r.json());
+const gz = async obj => new Uint8Array(await new Response(new Blob([JSON.stringify(obj)]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+const saveGz = async (name, obj) => fetch(`${P}/save?name=${name}`, {method: 'POST', headers: {'content-type': 'application/gzip'}, body: await gz(obj)}).then(r => r.json());
+
+async function listAll(layer, fields) {
+  const out = [];
+  const feats = await window.Live.vworld(layer, {geomFilter: KOREA, geometry: 'false'}, null, 10);
+  for (const f of feats) out.push(fields.map(k => f.properties[k]));
+  return out;
+}
+
+async function run() {
+  running = true;
+  const B = window.__batch;
+  log('행정구역 목록 받는 중…');
+  const sig = await listAll('LT_C_ADSIGG_INFO', ['sig_cd', 'full_nm']);
+  const emd = await listAll('LT_C_ADEMD_INFO', ['emd_cd', 'full_nm']);
+  sig.sort((a, b) => a[0].localeCompare(b[0]));
+  log(`시군구 ${sig.length}곳 · 읍면동 ${emd.length}곳`);
+  const saved = new Set(await (await fetch(`${P}/saved`)).json());
+  let status = {};
+  try { status = await (await fetch(`${P}/status`)).json(); } catch (e) { status = {}; }
+  B.total = sig.length;
+  for (const [code, name] of sig) {
+    if (!running) break;
+    B.current = name;
+    if (saved.has(`${code}.json.gz`)) { status[code] = {...(status[code] || {}), name, ok: true, final: true}; B.done++; B.ok++; continue; }
+    if (status[code] && status[code].final) { B.done++; B.fail++; continue; }
+    const item = {level: '시군구', layer: 'LT_C_ADSIGG_INFO', attr: `sig_cd:=:${code}`, code, name};
+    let res = null, err = null, t0 = Date.now();
+    for (let attempt = 0; attempt < 6; attempt++) {   // 네트워크 오류는 길게 기다리며 재시도
+      try {
+        res = await window.Live.analyze(item, window.DATA, (s, m) => { $('stat').textContent = ` ${B.done}/${B.total} · ${name} · ${m}`; }, {maxKm2: 2500, maxTiles: 400});
+        err = null; break;
+      } catch (e) {
+        err = String(e.message || e);
+        if (err === 'NOFREE' || err.startsWith('AREA:')) break;      // 다시 해도 같은 결과
+        log(`  ${name} 재시도 ${attempt + 1} — ${err}`, 'no');
+        await new Promise(r => setTimeout(r, /fetch|network|timeout|abort/i.test(err) ? 60000 : 20000));
+      }
+    }
+    const secs = Math.round((Date.now() - t0) / 1000);
+    if (res) {
+      const r = await saveGz(`${code}.json.gz`, window.Live.serialize(res));
+      status[code] = {name, ok: true, final: true, secs, bytes: r.bytes, alloc: res.meta.allocSite};
+      B.ok++; log(`✓ ${code} ${name} — ${secs}s · ${Math.round(r.bytes / 1024)}KB`, 'ok');
+    } else {
+      status[code] = {name, ok: false, final: err === 'NOFREE' || (err || '').startsWith('AREA:'), error: err, secs};
+      B.fail++; log(`✗ ${code} ${name} — ${err}`, 'no');
+    }
+    B.done++;
+    await save('_status.json', status);
+  }
+  // 검색 색인 — 시군구(계산 결과 여부 포함) + 읍면동(앞 5자리 = 시군구 코드)
+  const index = {built: new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10),
+    sig: sig.map(([code, name]) => ({code, name, ok: !!(status[code] && status[code].ok), error: status[code] && !status[code].ok ? status[code].error : undefined})),
+    emd: emd.map(([code, name]) => [code, name])};
+  await save('index.json', index);
+  B.finished = !running ? false : true; running = false;
+  log(`끝 — 성공 ${B.ok} · 실패 ${B.fail}`);
+}
+$('start').onclick = () => { if (!running) run().catch(e => { log('중단: ' + e.message, 'no'); running = false; }); };
+$('stop').onclick = () => { running = false; log('멈춤 요청 — 지금 계산 중인 곳까지 하고 멈춥니다'); };
+</script>
+</body>
+</html>

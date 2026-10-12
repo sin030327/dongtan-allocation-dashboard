@@ -1,6 +1,11 @@
 name = "vworld-proxy"
 main = "src/index.js"
 compatibility_date = "2024-09-23"
+preview_urls = false
+
+# VWorld 는 해외 서버 접속을 끊는다 — Worker 를 서울(AWS ap-northeast-2) 가까이에서 실행
+[placement]
+region = "aws:ap-northeast-2"
 
 [vars]
 # VWorld 인증키 발급 시 등록한 서비스 URL (domain 파라미터로 전송)

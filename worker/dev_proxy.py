@@ -17,7 +17,8 @@ VWORLD = "https://api.vworld.kr/req/data"
 ALLOWED_LAYERS = {
     "LT_C_ADSIDO_INFO", "LT_C_ADSIGG_INFO", "LT_C_ADEMD_INFO",
     "LT_C_UQ111", "LT_C_UQ112", "LT_C_UQ113", "LT_C_UQ114", "LT_C_UD801",
-    "LT_C_UPISUQ153", "LT_C_UPISUQ161", "LT_C_WKMSTRM",
+    "LT_C_UPISUQ153", "LT_C_UPISUQ158", "LT_C_UPISUQ161", "LT_C_WKMSTRM",
+    "LT_L_MOCTLINK", "LT_P_MOCTNODE",
 }
 PASS = ["data", "geomFilter", "attrFilter", "page", "size", "geometry", "columns"]
 OVERPASS = [
@@ -26,6 +27,7 @@ OVERPASS = [
     "https://overpass.private.coffee/api/interpreter",
     "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ]
+REGIONS = __import__("pathlib").Path(__file__).resolve().parents[1] / "docs" / "regions"
 KEY = os.environ.get("VWORLD_KEY")
 DOMAIN = os.environ.get("VWORLD_DOMAIN", "localhost")
 
@@ -61,6 +63,12 @@ class H(BaseHTTPRequestHandler):
                 except Exception as e:  # noqa: BLE001
                     last = f"{ep} {e}"
             return self._send(502, json.dumps({"error": f"overpass unavailable ({last})"}), ok)
+        if u.path == "/status":  # 개발 전용 — 일괄 계산 진행 기록
+            f = REGIONS / "_status.json"
+            return self._send(200, f.read_bytes() if f.exists() else b"{}", ok)
+        if u.path == "/saved":  # 개발 전용 — 이미 저장한 시군구 목록
+            names = sorted(f.name for f in REGIONS.glob("*.json*")) if REGIONS.exists() else []
+            return self._send(200, json.dumps(names), ok)
         if u.path != "/data":
             return self._send(200, json.dumps({"ok": True, "service": "vworld-proxy (dev)"}), ok)
         if qs.get("data") not in ALLOWED_LAYERS:
@@ -70,6 +78,29 @@ class H(BaseHTTPRequestHandler):
         p.update({k: qs[k] for k in PASS if k in qs})
         with urllib.request.urlopen(f"{VWORLD}?{urllib.parse.urlencode(p)}", timeout=60) as r:
             self._send(r.status, r.read(), ok)
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("access-control-allow-origin", self.headers.get("origin") or "*")
+        self.send_header("access-control-allow-methods", "GET, POST")
+        self.send_header("access-control-allow-headers", "content-type")
+        self.end_headers()
+
+    def do_POST(self):
+        """개발 전용 — 전국 시군구 미리 계산 결과를 docs/regions/ 에 저장 (localhost 출처만)"""
+        u = urllib.parse.urlparse(self.path)
+        origin = self.headers.get("origin") or ""
+        if u.path != "/save" or not re.match(r"^http://(localhost|127\.0\.0\.1)(:\d+)?$", origin):
+            return self._send(403, json.dumps({"error": "forbidden"}), None)
+        name = dict(urllib.parse.parse_qsl(u.query)).get("name", "")
+        if not re.match(r"^[0-9A-Za-z_]+\.json(\.gz)?$", name):
+            return self._send(400, json.dumps({"error": "bad name"}), origin)
+        body = self.rfile.read(int(self.headers.get("content-length", 0)))
+        if not name.endswith(".gz"):
+            json.loads(body)  # 형식 확인
+        REGIONS.mkdir(parents=True, exist_ok=True)
+        (REGIONS / name).write_bytes(body)
+        self._send(200, json.dumps({"ok": True, "bytes": len(body)}), origin)
 
     def log_message(self, fmt, *args):
         sys.stderr.write("proxy " + (fmt % args) + "\n")
